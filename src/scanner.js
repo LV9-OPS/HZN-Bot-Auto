@@ -1,4 +1,4 @@
-import { RevolutX } from "./revolut.js";
+﻿import { RevolutX } from "./revolut.js";
 
 const api = new RevolutX();
 const num = (value) => Number(value || 0);
@@ -42,8 +42,7 @@ export async function scan() {
   const preliminary = (response.data || [])
     .map((ticker) => ({ ticker, metrics: scoreTicker(ticker) }))
     .filter(({ ticker, metrics }) =>
-      ticker.symbol &&
-      metrics.change24h >= 1 &&
+      ticker.symbol &&`r`n      ticker.symbol.EndsWith("/USDC") &&`r`n      metrics.change24h >= 1 &&
       metrics.quoteVolume >= 100000 &&
       metrics.spread <= 1
     )
@@ -85,3 +84,4 @@ if (process.argv[1] && process.argv[1].endsWith("scanner.js")) {
     score: metrics.score
   })));
 }
+
