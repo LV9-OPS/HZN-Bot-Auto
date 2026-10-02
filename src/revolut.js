@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import crypto from "node:crypto";
 
 const BASE_URL = "https://revx.revolut.com/api";
@@ -40,7 +40,7 @@ export class RevolutX {
 
     const timestamp = Date.now().toString();
     const query = url.searchParams.toString();
-    const message = timestamp + method + path + query + body;
+    const signedPath = "/api" + path;`r`n    const message = timestamp + method + signedPath + query + body;
     const signature = crypto.sign(null, Buffer.from(message, "utf8"), this.privateKey).toString("base64");
 
     const headers = {
@@ -66,3 +66,4 @@ export class RevolutX {
     });
   }
 }
+
