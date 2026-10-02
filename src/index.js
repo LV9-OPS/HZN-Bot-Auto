@@ -217,7 +217,6 @@ async function main() {
     try {
       state = resetDailyState(state);
       if (mode === "live" && state.position?.pending) await syncPendingEntry(state);
-      if (mode === "live" && state.position?.exitPending) await syncPendingExit(state);
       await checkPosition(state);
       if (!state.position && canTrade(state)) {
         const candidates = await scan();
