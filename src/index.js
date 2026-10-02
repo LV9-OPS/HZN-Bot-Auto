@@ -60,8 +60,46 @@ async function syncPendingEntry(state) {
   return false;
 }
 
+async function syncPendingExit(state) {
+  if (!state.position?.exitPending || !state.position.exitOrderId) return false;
+  try {
+    const result = await api.getOrder(state.position.exitOrderId);
+    const order = orderData(result);
+    const stateName = String(order?.state || order?.status || "").toLowerCase();
+    if (["filled", "partially_filled"].includes(stateName)) {
+      const filled = Number(order.filled_quantity || order.quantity || state.position.baseSize || 0);
+      if (filled > 0) {
+        const exitPrice = Number(order.average_price || order.avg_price || order.price || state.position.exitPrice);
+        const pnlPct = ((exitPrice - state.position.entryPrice) / state.position.entryPrice) * 100;
+        const pnl = Number(state.position.quoteSize) * (pnlPct / 100);
+        state.realizedPnl += pnl;
+        state.trades.push({ side: "SELL", symbol: state.position.symbol, price: exitPrice, pnl, reason: state.position.exitReason, orderId: state.position.exitOrderId, at: new Date().toISOString() });
+        const symbol = state.position.symbol;
+        state.position = null;
+        await saveState(state);
+        await notify("HZN Bot Auto | LIVE EXIT FILLED\n" + symbol + " | " + state.trades.at(-1).reason + " | PnL " + pnlPct.toFixed(2) + "%");
+        log("LIVE EXIT FILLED", { symbol, exitPrice, pnlPct, pnl });
+        return true;
+      }
+    }
+    if (["cancelled", "canceled", "rejected", "expired"].includes(stateName)) {
+      log("LIVE EXIT ORDER NOT ACTIVE", { symbol: state.position.symbol, state: stateName });
+      state.position.exitPending = false;
+      state.position.exitOrderId = null;
+      state.position.exitReason = null;
+      await saveState(state);
+      return true;
+    }
+  } catch (error) {
+    log("EXIT SYNC ERROR", { message: error.message });
+  }
+  return false;
+}
+
 async function checkPosition(state) {
   if (!state.position || state.position.pending) return false;
+  if (state.position.exitPending) return syncPendingExit(state);
+
   const tickerResponse = await api.getTickers([state.position.symbol]);
   const ticker = (tickerResponse.data || [])[0];
   if (!ticker) return false;
@@ -92,11 +130,17 @@ async function checkPosition(state) {
 
   const result = await placeLimit(symbol, "SELL", baseSize, exitPrice);
   const item = orderData(result);
-  state.trades.push({ side: "SELL", symbol, price: exitPrice, reason: decision.reason, orderId: item?.venue_order_id || null, at: new Date().toISOString() });
-  state.position = null;
+  const exitOrderId = item?.venue_order_id || item?.id;
+  if (!exitOrderId) throw new Error("Live exit order was accepted without an order id.");
+
+  state.position.exitPending = true;
+  state.position.exitOrderId = exitOrderId;
+  state.position.exitPrice = exitPrice;
+  state.position.exitReason = decision.reason;
+  state.trades.push({ side: "SELL_ORDER", symbol, price: exitPrice, reason: decision.reason, orderId: exitOrderId, at: new Date().toISOString() });
   await saveState(state);
   await notify("HZN Bot Auto | LIVE EXIT ORDER\n" + symbol + " | " + decision.reason + " | " + exitPrice);
-  log("LIVE EXIT ORDER", { symbol, price: exitPrice, reason: decision.reason, orderId: item?.venue_order_id || null });
+  log("LIVE EXIT ORDER", { symbol, price: exitPrice, reason: decision.reason, orderId: exitOrderId });
   return true;
 }
 
@@ -173,6 +217,7 @@ async function main() {
     try {
       state = resetDailyState(state);
       if (mode === "live" && state.position?.pending) await syncPendingEntry(state);
+      if (mode === "live" && state.position?.exitPending) await syncPendingExit(state);
       await checkPosition(state);
       if (!state.position && canTrade(state)) {
         const candidates = await scan();
