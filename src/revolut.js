@@ -49,6 +49,7 @@ export class RevolutX {
   getActiveOrders(params = {}) { return this.authenticatedGet("/1.0/orders/active", params); }
   getHistoricalOrders(params = {}) { return this.authenticatedGet("/1.0/orders/historical", params); }
   getOrder(orderId) { return this.authenticatedGet("/1.0/orders/" + orderId); }
+  getTransactions(params = {}) { return this.authenticatedGet("/1.0/transactions", params); }
   placeOrder(order) { return this.authenticatedPost("/1.0/orders", order); }
   cancelOrder(orderId) { return this.authenticatedDelete("/1.0/orders/" + orderId); }
   cancelAllOrders() { return this.authenticatedDelete("/1.0/orders"); }
