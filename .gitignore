@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+data/*.json
+*.log
+HZN-Secrets/
+private.pem
+public.pem
