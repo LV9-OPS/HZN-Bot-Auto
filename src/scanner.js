@@ -43,7 +43,7 @@ export async function scan() {
     .map((ticker) => ({ ticker, metrics: scoreTicker(ticker) }))
     .filter(({ ticker, metrics }) =>
       ticker.symbol &&
-      String(ticker.symbol).EndsWith("/USDC") &&
+      String(ticker.symbol).endsWith("/USDC") &&
       metrics.change24h >= 1 &&
       metrics.quoteVolume >= 100000 &&
       metrics.spread <= 1

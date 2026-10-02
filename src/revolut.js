@@ -1,7 +1,20 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import crypto from "node:crypto";
 
 const BASE_URL = "https://revx.revolut.com/api";
+const PUBLIC_MIN_INTERVAL_MS = 1100;
+let publicQueue = Promise.resolve();
+let nextPublicRequestAt = 0;
+
+async function waitForPublicSlot() {
+  const slot = publicQueue.then(async () => {
+    const wait = Math.max(0, nextPublicRequestAt - Date.now());
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    nextPublicRequestAt = Date.now() + PUBLIC_MIN_INTERVAL_MS;
+  });
+  publicQueue = slot.catch(() => {});
+  await slot;
+}
 
 export class RevolutX {
   constructor() {
@@ -17,7 +30,18 @@ export class RevolutX {
   async publicGet(path, params = {}) {
     const url = new URL(BASE_URL + path);
     for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, value);
-    const response = await fetch(url);
+
+    await waitForPublicSlot();
+    let response = await fetch(url);
+
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get("retry-after") || 0);
+      const delay = Math.max(2000, retryAfter || 0);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      await waitForPublicSlot();
+      response = await fetch(url);
+    }
+
     const text = await response.text();
     if (!response.ok) throw new Error("Revolut public API " + response.status + ": " + text);
     return text ? JSON.parse(text) : {};
@@ -54,3 +78,4 @@ export class RevolutX {
   cancelOrder(orderId) { return this.authenticatedDelete("/1.0/orders/" + orderId); }
   cancelAllOrders() { return this.authenticatedDelete("/1.0/orders"); }
 }
+
