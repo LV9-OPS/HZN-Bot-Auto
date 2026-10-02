@@ -1,4 +1,4 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import crypto from "node:crypto";
 import { RevolutX } from "./revolut.js";
 import { scan } from "./scanner.js";
@@ -156,6 +156,18 @@ async function openPosition(state, candidate) {
   const pairKey = Object.keys(pairs).find((k) => k.replace("/", "-") === symbol);
   const config = pairKey ? pairs[pairKey] : null;
   if (!config || config.status !== "active") return false;
+
+  const quoteCurrency = String(config.quote || symbol.split("-")[1] || "").toUpperCase();
+  if (mode === "live") {
+    const balancesResponse = await api.getBalances();
+    const balances = Array.isArray(balancesResponse.data) ? balancesResponse.data : (Array.isArray(balancesResponse) ? balancesResponse : []);
+    const balance = balances.find((item) => String(item.currency || "").toUpperCase() === quoteCurrency);
+    const available = Number(balance?.available || 0);
+    if (available < maxTrade) {
+      log("SKIP: insufficient quote balance", { symbol, quoteCurrency, available, required: maxTrade });
+      return false;
+    }
+  }
 
   const baseSize = quoteToBase(maxTrade, price, config.base_step);
   if (!baseSize || baseSize < Number(config.min_order_size || 0)) {

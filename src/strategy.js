@@ -1,12 +1,33 @@
 ﻿function num(v) { return Number(v || 0); }
 const feePct = () => num(process.env.ESTIMATED_FEE_PCT || 0.09);
+
 export function evaluate(candidate) {
   const m = candidate.metrics;
-  const checks = { change15m: m.change15m >= 2, change60m: m.change60m >= 4, change24h: m.change24h >= 1, spread: m.spread <= 1, volume: m.quoteVolume >= 100000 };
+  const checks = {
+    change15m: m.change15m >= 1.5,
+    change60m: m.change60m >= 3,
+    change24h: m.change24h >= 1,
+    spread: m.spread <= 1,
+    volume: m.quoteVolume >= num(process.env.MIN_QUOTE_VOLUME || 25000)
+  };
   const passed = Object.values(checks).filter(Boolean).length;
-  const entryScore = m.score + (checks.change15m ? 10 : 0) + (checks.change60m ? 10 : 0);
-  return { symbol: candidate.ticker.symbol.replace("/", "-"), price: num(candidate.ticker.last_price), bid: num(candidate.ticker.bid), ask: num(candidate.ticker.ask), score: entryScore, passed, checks, signal: passed >= 5 && entryScore >= 80 };
+  const entryScore =
+    m.score +
+    (checks.change15m ? 10 : 0) +
+    (checks.change60m ? 10 : 0) +
+    (m.volumeAcceleration >= 1.5 ? 10 : 0);
+  return {
+    symbol: candidate.ticker.symbol.replace("/", "-"),
+    price: num(candidate.ticker.last_price),
+    bid: num(candidate.ticker.bid),
+    ask: num(candidate.ticker.ask),
+    score: entryScore,
+    passed,
+    checks,
+    signal: passed >= 4 && entryScore >= 80 && (checks.change15m || checks.change60m || (m.volumeAcceleration >= 2 && checks.change24h && m.volatility >= 1))
+  };
 }
+
 export function netTargetPrice(position) {
   const targetNetPct = num(process.env.NET_PROFIT_TARGET_PCT || 10);
   const exitFeePct = feePct();
@@ -16,6 +37,7 @@ export function netTargetPrice(position) {
   if (!baseSize) return 0;
   return (cost * (1 + targetNetPct / 100)) / (baseSize * (1 - exitFeePct / 100));
 }
+
 export function exitDecision(position, price) {
   const pnlPct = ((price - position.entryPrice) / position.entryPrice) * 100;
   const newHigh = Math.max(position.highWatermark || position.entryPrice, price);
@@ -29,3 +51,4 @@ export function exitDecision(position, price) {
   else if (pnlPct >= activation && price <= newHigh * (1 - trail / 100)) reason = "TRAILING_STOP";
   return { reason, pnlPct, highWatermark: newHigh, targetPrice, estimatedFeePct: feePct(), targetPct };
 }
+
