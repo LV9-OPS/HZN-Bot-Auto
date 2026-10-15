@@ -14,11 +14,11 @@ export class Journal {
 
   /** Must be called BEFORE an order is sent. */
   recordOrderIntent(intent) {
-    appendLineDurable(this.ordersFile, JSON.stringify({ ts: new Date().toISOString(), type: "intent", ...intent }));
+    appendLineDurable(this.ordersFile, JSON.stringify({ ...intent, ts: new Date().toISOString(), record: "intent" }));
   }
 
   recordOrderUpdate(update) {
-    appendLineDurable(this.ordersFile, JSON.stringify({ ts: new Date().toISOString(), type: "update", ...update }));
+    appendLineDurable(this.ordersFile, JSON.stringify({ ...update, ts: new Date().toISOString(), record: "update" }));
   }
 
   event(kind, data) {
