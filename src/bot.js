@@ -375,7 +375,7 @@ export class Bot {
     const quoteBal = this.state.paper?.balances?.[this.cfg.QUOTE_CURRENCY];
     return {
       at: new Date(this.clock.now()).toISOString(), mode: this.mode, healthy: issues.length === 0, issues, uptimeMin: Math.round((this.clock.now() - this.startedAt) / 60000),
-      entryGate: gate, capital: { budget: this.risk.budget(), deployed: this.risk.deployedQuote(this.state), remaining: this.risk.remainingBudget(this.state), quoteBalance: this.mode === "paper" ? quoteBal : "see exchange" },
+      entryGate: gate, capital: { budget: this.risk.budget(), deployed: this.risk.deployedQuote(this.state), remaining: this.risk.remainingBudget(this.state), quoteBalance: this.mode === "paper" ? quoteBal : this.state.lastBalances?.[this.cfg.QUOTE_CURRENCY]?.available ?? "unknown" },
       positions, performance: performance(this.state, priceOf, this.cfg), leaderboard: this.scanner.leaderboard(10), discrepancies: this.state.discrepancies.slice(-20),
       unmanagedHoldings: this.state.unmanagedHoldings, reconciliation: this.state.reconciliation, api: { ...this.scheduler.stats(), radarIntervalMs: this.radarIntervalMs, authenticated: this.client.authenticated },
       rejections: this.state.rejections, recentHistory: this.state.history.slice(-10).map((p) => ({ symbol: p.symbol, status: p.status, reason: p.exitReason, net: p.realizedNetPnl, closedAt: p.closedAt }))
