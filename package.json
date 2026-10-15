@@ -15,6 +15,7 @@
     "adopt": "node src/cli/adopt.js",
     "resolve": "node src/cli/resolve.js",
     "fetch-history": "node tools/fetch-history.js",
+    "fetch-binance": "node tools/fetch-binance-history.js",
     "replay": "node tools/replay.js",
     "account": "node tools/account-report.js",
     "check": "node tools/check-syntax.js",
