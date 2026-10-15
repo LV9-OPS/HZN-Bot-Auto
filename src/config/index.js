@@ -31,13 +31,14 @@ export const SPEC = {
   API_ORDERS_PER_DAY: { type: "int", def: 600, min: 10, max: 950, desc: "Order placement budget per day (doc limit 1000)" },
 
   // --- capital ---
-  MAX_TRADING_BUDGET_QUOTE: { type: "num", def: 10, min: 1, max: 10, desc: "Hard cap on capital deployed (USDC). Hard-limited to 10 by code." },
-  SLOT_ALLOCATIONS: { type: "list-num", def: [5, 3, 2], desc: "Per-slot allocation in USDC, slot 1..3" },
+  MAX_TRADING_BUDGET_QUOTE: { type: "num", def: 10, min: 1, max: 10, desc: "Hard cap on capital deployed (quote currency). Hard-limited to 10 by code." },
+  SLOT_ALLOCATIONS: { type: "list-num", def: [5, 3, 2], desc: "Per-slot allocation in quote currency, slot 1..3" },
   MAX_OPEN_POSITIONS: { type: "int", def: 3, min: 1, max: 3, desc: "Simultaneous positions" },
-  QUOTE_CURRENCY: { type: "enum", enum: ["USDC"], def: "USDC", desc: "Quote currency traded" },
+  QUOTE_CURRENCY: { type: "enum", enum: ["USDC", "EUR", "USD"], def: "USDC", desc: "Quote currency traded (EUR/USD books on Revolut X are 10-20x more liquid than USDC)" },
+  TRADE_ASSETS: { type: "list", def: [], desc: "Whitelist of base assets to trade, e.g. BTC,ETH,SOL,XRP (empty = every active pair)" },
   MIN_POSITION_QUOTE: { type: "num", def: 1, min: 0.1, max: 10, desc: "Below this an allocation is not worth trading" },
   DUST_THRESHOLD_QUOTE: { type: "num", def: 0.5, min: 0, max: 5, desc: "Holdings worth less are dust" },
-  PAPER_START_QUOTE: { type: "num", def: 10, min: 1, max: 100000, desc: "Paper account starting USDC" },
+  PAPER_START_QUOTE: { type: "num", def: 10, min: 1, max: 100000, desc: "Paper account starting quote balance" },
 
   // --- exits ---
   STOP_LOSS_PCT: { type: "num", def: 3, min: 0.5, max: 50, desc: "Initial stop below entry, checked on bid, active until target reached" },

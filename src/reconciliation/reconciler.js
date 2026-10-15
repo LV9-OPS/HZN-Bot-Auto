@@ -176,7 +176,7 @@ export class Reconciler {
         if (!recovered) unmanaged.push({ currency: cur, total: bal.total, valueQuote: Number.isFinite(value) ? Number(value.toFixed(4)) : null, note: "not created by this bot (no matching client_order_id) - not managed" });
       }
       const prev = new Set((this.state.unmanagedHoldings || []).map((h) => h.currency));
-      for (const h of unmanaged) if (!prev.has(h.currency)) this.notifier.warning(`Avoir non géré détecté : ${fmt(h.total, 8)} ${h.currency} (~${h.valueQuote ?? "?"} USDC). Il n'a pas été acheté par ce bot (aucun client_order_id connu) : il ne sera ni vendu ni compté dans le budget. Pour le confier au bot : npm run adopt -- ${h.currency}-${this.cfg.QUOTE_CURRENCY}`);
+      for (const h of unmanaged) if (!prev.has(h.currency)) this.notifier.warning(`Avoir non géré détecté : ${fmt(h.total, 8)} ${h.currency} (~${h.valueQuote ?? "?"} ${this.cfg.QUOTE_CURRENCY}). Il n'a pas été acheté par ce bot (aucun client_order_id connu) : il ne sera ni vendu ni compté dans le budget. Pour le confier au bot : npm run adopt -- ${h.currency}-${this.cfg.QUOTE_CURRENCY}`);
       this.state.unmanagedHoldings = unmanaged;
 
       // 7. Orphaned orders of ours (resting orders not linked to any position)

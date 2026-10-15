@@ -179,7 +179,7 @@ export class Bot {
     if (monthPnl > -limit) return;
     s.monthly.flattened = new Date(this.clock.now()).toISOString();
     this.store.save({ backup: true });
-    this.notifier.emergency(`Limite de perte mensuelle atteinte (${monthPnl.toFixed(4)} USDC <= -${limit.toFixed(4)}, ${this.cfg.MONTHLY_LOSS_PCT}%). Politique « flatten » : vente de toutes les positions du bot et aucune nouvelle entrée jusqu'au mois prochain.`);
+    this.notifier.emergency(`Limite de perte mensuelle atteinte (${monthPnl.toFixed(4)} ${this.cfg.QUOTE_CURRENCY} <= -${limit.toFixed(4)}, ${this.cfg.MONTHLY_LOSS_PCT}%). Politique « flatten » : vente de toutes les positions du bot et aucune nouvelle entrée jusqu'au mois prochain.`);
     for (const p of Object.values(s.positions)) {
       if (p.status === "open" || p.status === "closing") {
         this.orders.logPos?.(p, "monthly_loss_limit", { monthPnl });
@@ -355,7 +355,7 @@ export class Bot {
         continue;
       }
       const plan = this.cfg.plans[slot - 1];
-      this.log.warn(`ENTRY ${c.exec} slot ${slot} ${alloc.amount} USDC`, { explanation: c.explanation, order: conf.order, costs: conf.costs });
+      this.log.warn(`ENTRY ${c.exec} slot ${slot} ${alloc.amount} ${this.cfg.QUOTE_CURRENCY}`, { explanation: c.explanation, order: conf.order, costs: conf.costs });
       this.notifier.entryDecision({ candidate: c, slot, plan, allocation: alloc.amount, order: conf.order, costs: conf.costs });
       const p = await this.orders.openPosition({ symbol: c.exec, slot, plan, allocationQuote: alloc.amount, order: conf.order, signal: { score: c.score, explanation: c.explanation, reference: c.ref } });
       return p; // at most one entry per cycle

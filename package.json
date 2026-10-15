@@ -4,7 +4,9 @@
   "private": true,
   "description": "Early-momentum crypto trading bot for the Revolut X API (paper by default)",
   "type": "module",
-  "engines": { "node": ">=20.12" },
+  "engines": {
+    "node": ">=20.12"
+  },
   "scripts": {
     "start": "node src/index.js",
     "status": "node src/cli/status.js",
@@ -21,7 +23,8 @@
     "replay": "node tools/replay.js",
     "account": "node tools/account-report.js",
     "check": "node tools/check-syntax.js",
-    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "spreads": "node tools/spreads.js"
   },
   "dependencies": {}
 }

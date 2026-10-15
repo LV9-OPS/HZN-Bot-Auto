@@ -12,7 +12,7 @@ import { RiskManager } from "../risk/riskManager.js";
 
 const { cfg, logger, client } = setup({ overrides: { BOT_MODE: "paper" }, level: "warn" });
 const symbol = String(positional(0) || "").toUpperCase().replace("/", "-");
-if (!/^[A-Z0-9]+-USDC$/.test(symbol)) {
+if (!/^[A-Z0-9]+-(USDC|EUR|USD)$/.test(symbol)) {
   console.error("usage: npm run adopt -- XRP-USDC [--entry PRICE] [--slot N] [--yes]");
   process.exit(1);
 }

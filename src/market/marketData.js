@@ -37,14 +37,21 @@ export class MarketData {
     return pairs;
   }
 
-  /** Eligible execution universe: active BASE-USDC pairs, non-stable bases. */
+  /** Eligible execution universe: active BASE-<QUOTE> pairs, non-stable bases, optional TRADE_ASSETS whitelist. */
   executionUniverse() {
     const q = this.cfg.QUOTE_CURRENCY;
-    return [...this.pairs.values()].filter((p) => p.quote === q && p.status === "active" && !STABLE_OR_FIAT.has(p.base));
+    const only = (this.cfg.TRADE_ASSETS || []).map((a) => String(a).toUpperCase());
+    return [...this.pairs.values()].filter((p) => p.quote === q && p.status === "active" && !STABLE_OR_FIAT.has(p.base) && (!only.length || only.includes(p.base)));
   }
 
   /** For a base asset choose the most liquid reference market among SIGNAL_REFERENCE_QUOTES. */
   referenceFor(base) {
+    // With a liquid fiat quote (EUR/USD) the execution pair itself is the best signal source:
+    // no cross-currency noise and stop levels are computed on the market actually traded.
+    if (this.cfg.QUOTE_CURRENCY !== "USDC") {
+      const own = this.pairs.get(`${base}-${this.cfg.QUOTE_CURRENCY}`);
+      if (own && own.status === "active") return own.symbol || `${base}-${this.cfg.QUOTE_CURRENCY}`;
+    }
     let best = null;
     for (const q of this.cfg.SIGNAL_REFERENCE_QUOTES) {
       const sym = `${base}-${q}`;

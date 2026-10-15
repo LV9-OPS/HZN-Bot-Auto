@@ -89,7 +89,7 @@ export class DiscordNotifier {
     if (!tk || !(tk.bid > 0) || !(p.qty > 0)) return { line: "Prix actuel : indisponible", bid: null };
     const value = p.qty * tk.bid * (1 - this.cfg.TAKER_FEE_PCT / 100);
     const net = value - p.costBasisQuote * (p.initialQty > 0 ? p.qty / p.initialQty : 1);
-    return { line: `Prix actuel (bid) : ${fmt(tk.bid, 6)} | PnL net estimé : ${net >= 0 ? "+" : ""}${fmt(net, 4)} USDC (${fmt((net / p.costBasisQuote) * 100, 2)}%)`, bid: tk.bid };
+    return { line: `Prix actuel (bid) : ${fmt(tk.bid, 6)} | PnL net estimé : ${net >= 0 ? "+" : ""}${fmt(net, 4)} ${this.q} (${fmt((net / p.costBasisQuote) * 100, 2)}%)`, bid: tk.bid };
   }
 
   #protection(p) {
@@ -110,8 +110,12 @@ export class DiscordNotifier {
   }
 
   // ---------------------------------------------------------------- events
+  get q() {
+    return this.cfg?.QUOTE_CURRENCY || "USDC";
+  }
+
   startup({ mode, config, auth, reconcile, positions }) {
-    this.send(`Démarrage. Mode **${mode.toUpperCase()}**. Auth Revolut X : ${auth}. Réconciliation : ${reconcile}. Positions gérées : ${positions}.\nBudget max ${config.MAX_TRADING_BUDGET_QUOTE} USDC | slots ${config.SLOT_ALLOCATIONS.join("/")} | stop -${config.STOP_LOSS_PCT}% | plans ${config.plans.map((p) => p.name).join(", ")}`, { key: "startup", cooldownMs: 60000 });
+    this.send(`Démarrage. Mode **${mode.toUpperCase()}**. Auth Revolut X : ${auth}. Réconciliation : ${reconcile}. Positions gérées : ${positions}.\nBudget max ${config.MAX_TRADING_BUDGET_QUOTE} ${config.QUOTE_CURRENCY} | slots ${config.SLOT_ALLOCATIONS.join("/")} | stop -${config.STOP_LOSS_PCT}% | plans ${config.plans.map((p) => p.name).join(", ")}`, { key: "startup", cooldownMs: 60000 });
   }
 
   authResult(ok, detail = "") {
@@ -123,7 +127,7 @@ export class DiscordNotifier {
   }
 
   entryDecision({ candidate, slot, plan, allocation, order, costs }) {
-    this.send(`🟢 Décision d'ACHAT ${candidate.exec} — slot ${slot} (${allocation} USDC, plan ${plan.name})\nPourquoi : ${candidate.explanation}\nOrdre prévu : limite IOC ${order.baseSize} @ ${order.price} | coût aller-retour estimé ${fmt(costs.roundTripCostPct, 2)}%`);
+    this.send(`🟢 Décision d'ACHAT ${candidate.exec} — slot ${slot} (${allocation} ${this.q}, plan ${plan.name})\nPourquoi : ${candidate.explanation}\nOrdre prévu : limite IOC ${order.baseSize} @ ${order.price} | coût aller-retour estimé ${fmt(costs.roundTripCostPct, 2)}%`);
   }
 
   orderSubmitted({ position, side, order, reason, bid }) {
@@ -140,7 +144,7 @@ export class DiscordNotifier {
   }
 
   entryFilled({ position: p }) {
-    this.send(`✅ ACHAT **EXÉCUTÉ** : **${p.symbol}**${p.partialEntry ? " (partiel)" : ""}\nEntrée moyenne : ${fmt(p.entryPrice, 6)} | Quantité : ${fmt(p.qty, 8)} | Coût : ${fmt(p.costBasisQuote, 4)} USDC (frais ${fmt(p.entryFeeQuote, 4)})\nPourquoi : ${p.signal?.explanation || "n/a"}\n${this.#pnl(p).line}\n${this.#protection(p)}`);
+    this.send(`✅ ACHAT **EXÉCUTÉ** : **${p.symbol}**${p.partialEntry ? " (partiel)" : ""}\nEntrée moyenne : ${fmt(p.entryPrice, 6)} | Quantité : ${fmt(p.qty, 8)} | Coût : ${fmt(p.costBasisQuote, 4)} ${this.q} (frais ${fmt(p.entryFeeQuote, 4)})\nPourquoi : ${p.signal?.explanation || "n/a"}\n${this.#pnl(p).line}\n${this.#protection(p)}`);
   }
 
   targetReached(p) {
@@ -153,11 +157,11 @@ export class DiscordNotifier {
   }
 
   exitFilled({ position: p, exit, partial }) {
-    this.send(`💰 VENTE **EXÉCUTÉE**${partial ? " (PARTIELLE)" : ""} : **${p.symbol}** — ${fmt(exit.filledQty, 8)} @ ${fmt(exit.avgPrice, 6)} (frais ${fmt(exit.feeQuote, 4)})\nRaison : ${exit.reason} | PnL net de cette vente : ${exit.realizedNetPnl >= 0 ? "+" : ""}${fmt(exit.realizedNetPnl, 4)} USDC${partial ? `\nReste à vendre : ${fmt(p.qty, 8)}` : ""}`);
+    this.send(`💰 VENTE **EXÉCUTÉE**${partial ? " (PARTIELLE)" : ""} : **${p.symbol}** — ${fmt(exit.filledQty, 8)} @ ${fmt(exit.avgPrice, 6)} (frais ${fmt(exit.feeQuote, 4)})\nRaison : ${exit.reason} | PnL net de cette vente : ${exit.realizedNetPnl >= 0 ? "+" : ""}${fmt(exit.realizedNetPnl, 4)} ${this.q}${partial ? `\nReste à vendre : ${fmt(p.qty, 8)}` : ""}`);
   }
 
   positionClosed({ position: p }) {
-    this.send(`📕 Position clôturée ${p.symbol} (${p.exitReason}). PnL net réalisé : ${p.realizedNetPnl >= 0 ? "+" : ""}${fmt(p.realizedNetPnl, 4)} USDC (frais inclus)${p.dustQty ? ` | résidu non vendable : ${fmt(p.dustQty, 8)}` : ""}`);
+    this.send(`📕 Position clôturée ${p.symbol} (${p.exitReason}). PnL net réalisé : ${p.realizedNetPnl >= 0 ? "+" : ""}${fmt(p.realizedNetPnl, 4)} ${this.q} (frais inclus)${p.dustQty ? ` | résidu non vendable : ${fmt(p.dustQty, 8)}` : ""}`);
   }
 
   reconciliation({ discrepancy: d, position }) {
@@ -169,7 +173,7 @@ export class DiscordNotifier {
   }
 
   dailySummary(s) {
-    this.send(`📊 Résumé du ${s.day}\nPnL net réalisé : ${fmt(s.realizedNetPnl, 4)} USDC | frais : ${fmt(s.fees, 4)} | entrées : ${s.entries} | sorties : ${s.exits}\nCumul : ${fmt(s.totalNet, 4)} USDC | trades ${s.trades} | taux de gain ${s.winRate} | gain moyen ${fmt(s.avgWin, 4)} | perte moyenne ${fmt(s.avgLoss, 4)} | drawdown max ${fmt(s.maxDrawdown, 4)}\nPositions ouvertes : ${s.open} | exposition ${fmt(s.exposure, 4)} USDC | non-réalisé ${fmt(s.unrealized, 4)} USDC\nSignaux rejetés (top) : ${s.topRejections}`, { key: "daily-" + s.day, cooldownMs: 3600000 });
+    this.send(`📊 Résumé du ${s.day}\nPnL net réalisé : ${fmt(s.realizedNetPnl, 4)} ${this.q} | frais : ${fmt(s.fees, 4)} | entrées : ${s.entries} | sorties : ${s.exits}\nCumul : ${fmt(s.totalNet, 4)} ${this.q} | trades ${s.trades} | taux de gain ${s.winRate} | gain moyen ${fmt(s.avgWin, 4)} | perte moyenne ${fmt(s.avgLoss, 4)} | drawdown max ${fmt(s.maxDrawdown, 4)}\nPositions ouvertes : ${s.open} | exposition ${fmt(s.exposure, 4)} ${this.q} | non-réalisé ${fmt(s.unrealized, 4)} ${this.q}\nSignaux rejetés (top) : ${s.topRejections}`, { key: "daily-" + s.day, cooldownMs: 3600000 });
   }
 
   emergency(text) {
