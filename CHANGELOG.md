@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.1.0 — 2026-10-16
+### Added
+- `QUOTE_CURRENCY` now accepts `EUR` and `USD` (Revolut X fiat books are 10–20× more liquid than USDC).
+- `TRADE_ASSETS` whitelist (e.g. `BTC,ETH,SOL,XRP`).
+- With a fiat quote, the execution pair itself is the signal reference.
+- `npm run spreads`: read-only spread and volume sampler. Measured on 16 Oct 2026: BTC-EUR 0.012%, ETH-EUR 0.018%, SOL-EUR 0.048%, XRP-EUR 0.050% (USDC: 0.12–0.19%).
+- Discord and log amounts use the configured quote currency.
+- 116 tests.
+
+### Research
+- Walk-forward on BTC/ETH/SOL/XRP at 0.035% spread: combined OOS +35.5% over 82 months (DD 21.8%); `trend` on train-selected windows t=2.05, PF 1.34, mean +0.55%/trade. It still fails the 0.2% spread robustness rule, so it is not formally validated.
+
 ## 4.0.0 — 2026-10-16 (intelligence upgrade, branch `rebuild/v3`)
 ### Added
 - `ENTRY_MODE=quant`: a 15-minute decision cycle on 1h bars with a 10-step, fully logged decision engine (`data/decisions.<mode>.jsonl`).

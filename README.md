@@ -7,6 +7,14 @@ Bot de trading crypto qui détecte les débuts de mouvement (« early momentum �
 > Aucun profit n'est garanti. Pendant la reconstruction, la stratégie a été rejouée sur les données réelles de 7 jours (8–15 oct. 2026) puis de 21 jours.
 > Sur ces périodes, le signal n'a **pas** couvert les frais, d'où la recommandation **NO-GO pour le live** (voir [docs/TEST_REPORT.md](docs/TEST_REPORT.md)).
 
+## Nouveauté v4.1 : trading en EUR sur BTC, ETH, SOL et XRP
+
+- `QUOTE_CURRENCY=EUR` et `TRADE_ASSETS=BTC,ETH,SOL,XRP` : le bot n'achète et ne vend plus que ces 4 cryptos, contre des euros.
+- Pourquoi : spreads mesurés sur Revolut X le 16 oct. 2026 (`npm run spreads`) : **0,01–0,05 % en EUR contre 0,12–0,19 % en USDC**, avec 10 à 20 fois plus de volume.
+- Les signaux sont calculés directement sur la paire EUR échangée (plus de conversion USD → USDC).
+- Le bot **ne convertit jamais** vos USDC en EUR : c'est à vous de le faire dans l'application Revolut X.
+- Walk-forward 2018–2026 sur ces 4 cryptos avec 0,035 % de spread : `trend` t = 2,05, PF 1,34 sur les fenêtres retenues. Non « validé » au sens strict (la règle exige aussi d'être rentable à 0,2 % de spread). Aucun résultat n'est garanti.
+
 ## Nouveauté v4 : moteur de décision quantitatif (`ENTRY_MODE=quant`)
 
 - **Cycle :** toutes les 15 minutes, le bot analyse des bougies d'1 heure.
@@ -47,7 +55,7 @@ vous-même dans l'application, et les affiche comme protection supplémentaire.
 
 ```powershell
 cd C:\Users\insan\HZN-Bot-Auto
-npm test                      # 85 tests automatiques
+npm test                      # 116 tests automatiques
 npm run reconcile             # vue LECTURE SEULE : votre compte réel comparé à l'état local
 npm start                     # mode paper dans cette fenêtre (Ctrl+C pour arrêter)
 # ou en mode supervisé (redémarrage automatique après un plantage) :
@@ -71,6 +79,7 @@ npm run stop                  # arrêt propre
 | `npm run resolve -- XRP-USDC --closed --yes` | Marquer comme clôturée une position vendue en dehors du bot |
 | `npm run fetch-history -- --days 7` | Télécharger l'historique en bougies 1 minute pour le rejeu |
 | `npm run replay` | Rejouer la stratégie sur l'historique, sans utiliser de données futures, avec frais, spread et glissement de prix (slippage) |
+| `npm run spreads` | Mesurer les spreads réels (lecture seule) |
 | `npm test` / `npm run check` | Tests / vérification de la syntaxe |
 
 ## Documentation
