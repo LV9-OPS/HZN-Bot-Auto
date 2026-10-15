@@ -1,7 +1,7 @@
 # Test report — v3.0.0 (15 Oct 2026)
 
 ## 1. Static checks
-`npm run check`: 54/54 files pass `node --check`.
+`npm run check`: 53/53 files pass `node --check`.
 
 ## 2. Automated tests — 85/85 pass
 Run on Linux (Node 22.22) and on the user's Windows PC (Node 24.21): `npm test`. All tests use mocked or simulated exchanges, and none touch the real account.
