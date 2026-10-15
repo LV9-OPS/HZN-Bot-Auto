@@ -44,7 +44,12 @@ export const SPEC = {
   PLAN_SLOT1: { type: "string", def: "2:1", desc: "target:floor multiples for slot 1 (X2 then floor X1)" },
   PLAN_SLOT2: { type: "string", def: "3:2", desc: "slot 2 (X3 then floor X2)" },
   PLAN_SLOT3: { type: "string", def: "3:2", desc: "slot 3 (X3 then floor X2)" },
-  ENTRY_MODE: { type: "enum", enum: ["momentum", "dip"], def: "momentum", desc: "momentum = early breakout; dip = buy a sharp 15-minute drop that stopped falling" },
+  ENTRY_MODE: { type: "enum", enum: ["momentum", "dip", "quant"], def: "momentum", desc: "momentum = early 1m breakout; dip = buy a sharp 15m drop; quant = 1h regime-aware decision engine (trend/breakout/pullback)" },
+  QUANT_STRATEGIES: { type: "list", def: ["TREND", "BREAKOUT", "PULLBACK"], desc: "quant: candidate strategies (trend, breakout, pullback)" },
+  QUANT_REQUIRE_VALIDATION: { type: "bool", def: true, desc: "quant: only strategies validated out-of-sample (data/strategy-validation.json) may trade" },
+  QUANT_CYCLE_MS: { type: "int", def: 900000, min: 60000, max: 3600000, desc: "quant: decision cycle (15 min)" },
+  RISK_PER_TRADE_PCT: { type: "num", def: 1, min: 0.1, max: 5, desc: "quant: planned max loss per trade (stop + costs) as % of equity" },
+  MAX_CORRELATION: { type: "num", def: 0.8, min: 0, max: 1, desc: "quant: reject a position whose 30-day 1h return correlation with an open one exceeds this" },
   DIP_MIN_DROP_15M_PCT: { type: "num", def: 2, min: 0.5, max: 20, desc: "dip: minimum 15-minute drop" },
   EXIT_MODE: { type: "enum", enum: ["plan", "scalp"], def: "plan", desc: "plan = X2/X3 profit plans; scalp = small take-profit, trailing stop, max holding time" },
   SCALP_TAKE_PROFIT_PCT: { type: "num", def: 1.5, min: 0, max: 50, desc: "scalp: sell when bid >= entry +X% (0 = off)" },
@@ -78,6 +83,11 @@ export const SPEC = {
   // --- risk ---
   MAX_DAILY_LOSS_QUOTE: { type: "num", def: 1.5, min: 0.1, max: 10, desc: "Realized net loss that blocks new entries for the day" },
   MAX_TRADES_PER_DAY: { type: "int", def: 8, min: 1, max: 100, desc: "Max entries per day" },
+  MONTHLY_LOSS_PCT: { type: "num", def: 3, min: 0.5, max: 50, desc: "Realized net loss this month (% of month-start equity) that blocks new entries until next month" },
+  MONTHLY_LIMIT_ACTION: { type: "enum", enum: ["flatten", "block"], def: "flatten", desc: "On the monthly loss limit: flatten = sell all bot positions and block entries until next month; block = block entries only" },
+  MAX_DRAWDOWN_PCT: { type: "num", def: 10, min: 1, max: 90, desc: "Realized drawdown from peak (vs budget) that halts entries until manual reset (npm run risk-reset)" },
+  LOSS_STREAK_PAUSE: { type: "int", def: 3, min: 0, max: 50, desc: "Consecutive losing trades that pause entries (0 = off)" },
+  LOSS_STREAK_PAUSE_HOURS: { type: "int", def: 24, min: 1, max: 720, desc: "Pause length after a losing streak" },
   RISK_DAY_TIMEZONE: { type: "string", def: "Europe/Paris", desc: "Time zone for the daily risk reset" },
 
   // --- cadence ---

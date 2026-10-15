@@ -10,6 +10,9 @@
 export function planLevels(position, stopLossPct) {
   const e = position.entryPrice;
   const p = position.plan;
+  if (p.mode === "quant") {
+    return { stopPrice: p.stopPrice, targetPrice: p.targetPrice > 0 ? p.targetPrice : Infinity, floorPrice: null };
+  }
   if (p.mode === "scalp") {
     return {
       stopPrice: e * (1 - stopLossPct / 100),
@@ -49,6 +52,12 @@ export function evaluateExit(position, price, { stopLossPct, now = Date.now() })
   const peak = Math.max(position.peakBid || 0, bid);
   updates.peakBid = peak;
 
+  if (position.plan.mode === "quant") {
+    // Dynamic ATR stop (trailing updated at each closed 1h bar by the quant engine), optional target.
+    if (bid >= levels.targetPrice) return { action: "exit", reason: "TAKE_PROFIT", updates, events, levels };
+    if (bid <= levels.stopPrice) return { action: "exit", reason: position.plan.trailed ? "TRAILING_STOP" : "STOP_LOSS", updates, events, levels };
+    return { action: "hold", reason: null, updates, events, levels };
+  }
   if (position.plan.mode === "scalp") {
     const p = position.plan;
     if (bid >= levels.targetPrice) return { action: "exit", reason: "TAKE_PROFIT", updates, events, levels };

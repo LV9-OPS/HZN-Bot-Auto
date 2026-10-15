@@ -23,6 +23,12 @@ export class OrderManager {
     return this.store.state;
   }
 
+  /** Append an auditable event to the position's own history. */
+  logPos(p, event, detail = {}) {
+    (p.log ||= []).push({ ts: new Date(this.clock.now()).toISOString(), event, status: p.status, ...detail });
+    if (p.log.length > 100) p.log.splice(0, p.log.length - 100);
+  }
+
   newClientOrderId() {
     return crypto.randomUUID();
   }
@@ -95,6 +101,9 @@ export class OrderManager {
       signal: signal ? { score: signal.score, explanation: signal.explanation, reference: signal.reference } : null,
       notes: [], lastBid: null, lastPriceAt: null
     };
+    if (signal?.decisionPrice) p.entry.expectedPrice = signal.decisionPrice;
+    if (signal?.quant) p.quant = signal.quant;
+    this.logPos(p, "entry_submitted", { order });
     this.state.positions[id] = p;
     this.risk.recordEntry(this.state);
     this.save(true);
@@ -192,6 +201,12 @@ export class OrderManager {
     p.openedAt = new Date(this.clock.now()).toISOString();
     p.peakBid = null;
     p.partialEntry = o.quantity > 0 && filled < o.quantity * 0.999;
+    if (p.entry.expectedPrice > 0) p.entry.slippagePct = ((avg - p.entry.expectedPrice) / p.entry.expectedPrice) * 100;
+    if (p.quant) {
+      // turn the strategy's planned distances into absolute levels around the REAL fill
+      p.plan = { ...p.plan, stopPrice: avg * (1 - p.quant.stopPct / 100), targetPrice: p.quant.targetPct > 0 ? avg * (1 + p.quant.targetPct / 100) : 0, highestClose: avg };
+    }
+    this.logPos(p, "entry_filled", { qty, avg, feeQuote, slippagePct: p.entry.slippagePct });
     this.journal.event("entry_filled", { id: p.id, symbol: p.symbol, qty, avg, feeQuote, partial: p.partialEntry });
     this.save(true);
     this.notifier.entryFilled({ position: p, order: o });
@@ -267,7 +282,8 @@ export class OrderManager {
         ? { type: "market", baseSize: sellSize }
         : { type: "limit", timeInForce: "ioc", baseSize: sellSize, price: (Math.floor(bid * (1 - this.cfg.EXIT_LIMIT_SLIPPAGE_PCT / 100) * 10 ** decimals) / 10 ** decimals).toFixed(decimals) };
       const clientOrderId = this.newClientOrderId();
-      const ex = { clientOrderId, venueOrderId: null, reason: p.exitReason, type: order.type, request: order, submittedAt: this.clock.now(), status: "submitting", emergency, attempts: 0 };
+      const ex = { clientOrderId, venueOrderId: null, reason: p.exitReason, type: order.type, request: order, submittedAt: this.clock.now(), status: "submitting", emergency, attempts: 0, expectedBid: bid };
+      this.logPos(p, "exit_submitted", { reason: p.exitReason, order });
       p.pendingExit = ex;
       this.save(true);
       this.notifier.orderSubmitted({ position: p, side: "sell", order, reason: p.exitReason, bid });
@@ -278,6 +294,13 @@ export class OrderManager {
         ex.error = res.error.message;
         p.exits.push(ex);
         p.pendingExit = null;
+        this.logPos(p, "exit_rejected", { error: res.error.message });
+        const rejections = p.exits.filter((x) => x.status === "rejected").length;
+        if (rejections >= 3) {
+          p.status = "error_locked";
+          this.logPos(p, "error_locked", { rejections });
+          this.notifier.critical(`${p.symbol} passe en ERROR_LOCKED après ${rejections} ventes rejetées par Revolut X. Aucune action automatique ; nouvelles entrées bloquées. Vérifie la position dans l'app.`, `locked-${p.id}`);
+        }
         this.save();
         this.notifier.orderFailed({ position: p, side: "sell", error: res.error });
         return { rejected: true };
@@ -369,6 +392,8 @@ export class OrderManager {
       ex.feeQuote = feeQuote;
       ex.proceedsQuote = proceeds;
       ex.realizedNetPnl = proceeds - costShare;
+      if (ex.expectedBid > 0) ex.slippagePct = ((avg - ex.expectedBid) / ex.expectedBid) * 100;
+      this.logPos(p, "exit_filled", { filled, avg, feeQuote, reason: ex.reason, slippagePct: ex.slippagePct });
       p.qty = Math.max(0, p.qty - filled);
       p.proceedsQuote = (p.proceedsQuote || 0) + proceeds;
       p.realizedNetPnl = (p.realizedNetPnl || 0) + ex.realizedNetPnl;
@@ -392,6 +417,7 @@ export class OrderManager {
 
   #finalize(p) {
     p.status = "closed";
+    this.logPos(p, "closed", { netPnl: p.realizedNetPnl });
     p.closedAt = new Date(this.clock.now()).toISOString();
     const fees = (p.entryFeeQuote || 0) + (p.exitFeesQuote || 0);
     this.risk.recordClose(this.state, { netPnl: p.realizedNetPnl || 0, fees, symbol: p.symbol });

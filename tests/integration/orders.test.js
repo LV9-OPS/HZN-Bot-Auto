@@ -181,3 +181,29 @@ test("insufficient quote balance is rejected by the exchange model and leaves no
   const p = await open(h);
   assert.equal(p.status, "failed");
 });
+
+test("three rejected exits lock the position (ERROR_LOCKED) and block new entries", async () => {
+  const h = harness();
+  const p = await open(h);
+  h.market.setTicker("SOL-USDC", 96.5, 96.6);
+  h.exchange.faults.placeOrder = "reject";
+  for (let i = 0; i < 3; i++) await h.om.exitPosition(h.store.state.positions[p.id], "STOP_LOSS");
+  const q = h.store.state.positions[p.id];
+  assert.equal(q.status, "error_locked");
+  assert.ok(h.risk.entryGate(h.store.state).reasons.some((r) => r.code === "position_error_locked"));
+  assert.ok(q.log.some((e) => e.event === "error_locked"), "audit trail kept on the position");
+});
+
+test("monthly loss limit (3% of month-start equity) blocks entries for the rest of the month", async () => {
+  const h = harness();
+  h.risk.rollDay(h.store.state);
+  h.risk.recordClose(h.store.state, { netPnl: -0.31, fees: 0.01, symbol: "SOL-USDC" });
+  assert.ok(h.risk.entryGate(h.store.state).reasons.some((r) => r.code === "monthly_loss_limit"));
+});
+
+test("realised entry slippage vs decision price is recorded", async () => {
+  const h = harness();
+  const p = await h.om.openPosition({ symbol: "SOL-USDC", slot: 1, plan, allocationQuote: 5, order: ORDER, signal: { score: 70, explanation: "t", decisionPrice: 100.1 } });
+  assert.ok(Number.isFinite(p.entry.slippagePct));
+  assert.ok(p.entry.slippagePct > 0);
+});

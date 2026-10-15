@@ -18,7 +18,23 @@ if (action === "stop") {
 } else if (action === "emergency-off") {
   try { fs.unlinkSync(path.join(cfg.dataDir, "EMERGENCY_STOP")); } catch { /* none */ }
   console.log("EMERGENCY_STOP cleared.");
+} else if (action === "risk-reset") {
+  // Acknowledge a max-drawdown halt after a manual review: the drawdown peak restarts from now.
+  const { StateStore } = await import("../storage/stateStore.js");
+  const { acquireLock } = await import("../monitoring/instanceLock.js");
+  const mode = arg("mode", cfg.BOT_MODE);
+  const lock = acquireLock(cfg.dataDir, mode);
+  try {
+    const store = new StateStore({ dataDir: cfg.dataDir, mode });
+    store.load({ allowFresh: false });
+    store.state.riskPeakRealized = store.state.stats.realizedNetPnl || 0;
+    store.state.riskResetAt = new Date().toISOString();
+    store.save({ backup: true });
+    console.log(`Drawdown halt reset for ${mode} (peak = current realized PnL ${store.state.riskPeakRealized.toFixed(4)}).`);
+  } finally {
+    lock.release();
+  }
 } else {
-  console.log("usage: node src/cli/control.js stop|emergency-on|emergency-off");
+  console.log("usage: node src/cli/control.js stop|emergency-on|emergency-off|risk-reset");
   process.exit(1);
 }

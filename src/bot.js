@@ -19,6 +19,9 @@ import { writeFileAtomic } from "./storage/atomicFile.js";
 import { dayKey, sleep as realSleep } from "./util/time.js";
 import { fmt } from "./util/num.js";
 import { registerSecret } from "./monitoring/redact.js";
+import { QuantLive } from "./quant/live.js";
+import { applyKillSwitch, strategyReport } from "./quant/performance.js";
+import { STATE_NAMES } from "./risk/riskManager.js";
 
 export class Bot {
   constructor({ cfg, logger, fetchImpl = globalThis.fetch, discordFetch = globalThis.fetch, clock = { now: () => Date.now() }, sleep = realSleep, exchangeOverride = null, clientOverride = null }) {
@@ -76,6 +79,10 @@ export class Bot {
     this.orders = new OrderManager({ cfg: this.cfg, store: this.store, journal: this.journal, exchange: this.exchange, market: this.market, risk: this.risk, notifier: this.notifier, logger: this.#child("orders"), clock: this.clock, sleep: this.sleep });
     this.reconciler = new Reconciler({ cfg: this.cfg, store: this.store, journal: this.journal, exchange: this.exchange, market: this.market, orders: this.orders, notifier: this.notifier, logger: this.#child("reconcile"), client: this.client, clock: this.clock });
 
+    if (this.cfg.ENTRY_MODE === "quant") {
+      this.quant = new QuantLive({ cfg: this.cfg, client: this.client, market: this.market, risk: this.risk, store: this.store, orders: this.orders, notifier: this.notifier, logger: this.#child("quant"), clock: this.clock, exchange: this.exchange });
+    }
+
     // Diagnostics
     let auth = "non configurée (données publiques)";
     if (this.client.authenticated) {
@@ -104,7 +111,10 @@ export class Bot {
   async run() {
     const t = (name, every, fn) => (this.tasks[name] = { every, fn, last: 0, running: false });
     t("positions", () => (this.client.authenticated ? this.cfg.POSITION_INTERVAL_MS : Math.max(3000, this.cfg.POSITION_INTERVAL_MS)), () => this.monitorPositions());
-    t("radar", () => this.radarIntervalMs, () => this.scanCycle());
+    if (this.quant) {
+      t("quant", () => this.cfg.QUANT_CYCLE_MS, () => this.quantCycle());
+      t("tickers", () => 60000, () => this.market.refreshAllTickers(PRIORITY.RADAR).then(() => {}));
+    } else t("radar", () => this.radarIntervalMs, () => this.scanCycle());
     t("reconcile", () => this.cfg.RECONCILE_INTERVAL_MS, () => this.reconcileCycle(false));
     t("history", () => this.cfg.HISTORY_SYNC_INTERVAL_MS, () => this.reconcileCycle(true));
     t("status", () => 5000, () => this.writeStatus());
@@ -153,9 +163,35 @@ export class Bot {
   }
 
   // ------------------------------------------------------------------ positions
+  /** Monthly loss policy (realized + unrealized vs month-start equity). */
+  async monthlyPolicy() {
+    const s = this.state;
+    this.risk.rollDay(s);
+    if (this.cfg.MONTHLY_LIMIT_ACTION !== "flatten" || s.monthly?.flattened) return;
+    let unrealized = 0;
+    for (const p of Object.values(s.positions)) {
+      if (p.status !== "open") continue;
+      const tk = this.market.freshTicker(p.symbol);
+      if (tk?.bid) unrealized += p.qty * tk.bid * (1 - this.cfg.TAKER_FEE_PCT / 100) - p.costBasisQuote * (p.initialQty > 0 ? p.qty / p.initialQty : 1);
+    }
+    const monthPnl = (s.monthly?.realizedNetPnl || 0) + unrealized;
+    const limit = (this.cfg.MONTHLY_LOSS_PCT / 100) * (s.monthly?.startEquity || this.risk.budget());
+    if (monthPnl > -limit) return;
+    s.monthly.flattened = new Date(this.clock.now()).toISOString();
+    this.store.save({ backup: true });
+    this.notifier.emergency(`Limite de perte mensuelle atteinte (${monthPnl.toFixed(4)} USDC <= -${limit.toFixed(4)}, ${this.cfg.MONTHLY_LOSS_PCT}%). Politique « flatten » : vente de toutes les positions du bot et aucune nouvelle entrée jusqu'au mois prochain.`);
+    for (const p of Object.values(s.positions)) {
+      if (p.status === "open" || p.status === "closing") {
+        this.orders.logPos?.(p, "monthly_loss_limit", { monthPnl });
+        await this.orders.exitPosition(p, "MONTHLY_LOSS_LIMIT", { emergency: true });
+      }
+    }
+  }
+
   async monitorPositions() {
     const positions = Object.values(this.state.positions);
     if (!positions.length) return;
+    await this.monthlyPolicy();
     const symbols = [...new Set(positions.map((p) => p.symbol))].filter((s) => this.market.pair(s));
     try {
       await this.market.refreshTickers(symbols, PRIORITY.POSITION);
@@ -222,7 +258,7 @@ export class Bot {
         }
         if (changed) {
           this.store.save({ backup: true }); // persisted BEFORE any further action: survives restarts
-          if (p.plan.mode !== "scalp") this.notifier.targetReached(p);
+          if (!p.plan.mode || p.plan.mode === "plan") this.notifier.targetReached(p);
           this.journal.event("target_reached", { id: p.id, symbol: p.symbol, bid: price.bid });
         }
         if (d.action === "exit") {
@@ -268,6 +304,16 @@ export class Bot {
     }
     for (const c of candidates) if (c.score >= this.cfg.DISCORD_CANDIDATE_MIN_SCORE) this.notifier.candidate(c);
     if (candidates.length) await this.tryEntry(candidates);
+  }
+
+  async quantCycle() {
+    const ks = applyKillSwitch(this.state);
+    for (const s of ks.newly) this.notifier.critical(`Stratégie « ${s} » DÉSACTIVÉE automatiquement : ${this.state.strategyStatus[s].reason}. Réactivation uniquement après nouvelle validation hors production.`, `kill-${s}`);
+    if (ks.newly.length) this.store.save({ backup: true });
+    const sum = await this.quant.cycle();
+    const rej = Object.entries(sum.rejections || {}).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${k}:${v}`).join(", ");
+    this.log.info(`quant cycle: ${sum.candidates?.length || 0} candidate(s); enabled=[${sum.enabled}] validated=[${sum.validated}] gate=${JSON.stringify(sum.gate)} top rejections ${rej}`);
+    for (const [code, n] of Object.entries(sum.rejections || {})) this.state.rejections["quant_" + code] = (this.state.rejections["quant_" + code] || 0) + n;
   }
 
   async tryEntry(candidates) {
@@ -366,7 +412,7 @@ export class Bot {
       const share = p.initialQty > 0 ? p.qty / p.initialQty : 1;
       const net = tk?.bid && p.qty ? p.qty * tk.bid * (1 - this.cfg.TAKER_FEE_PCT / 100) - p.costBasisQuote * share : null;
       return {
-        id: p.id, symbol: p.symbol, slot: p.slot, plan: p.plan.name, status: p.status, origin: p.origin, qty: p.qty, entryPrice: p.entryPrice,
+        id: p.id, symbol: p.symbol, slot: p.slot, plan: p.plan.name, status: p.status, state: STATE_NAMES[p.status] || p.status, origin: p.origin, qty: p.qty, entryPrice: p.entryPrice,
         bid: tk?.bid ?? null, stopPrice: lv.stopPrice ? Number(lv.stopPrice.toPrecision(6)) : null, targetPrice: lv.targetPrice ? Number(lv.targetPrice.toPrecision(6)) : null,
         floorPrice: lv.floorPrice ? Number(lv.floorPrice.toPrecision(6)) : null, targetReached: p.targetReached, netPnl: net === null ? null : Number(net.toFixed(4)),
         protection: p.protection?.nativeOrderIds?.length ? "software + native (manual)" : "software only", pendingExit: p.pendingExit ? p.pendingExit.status : null, notes: p.notes?.slice(-3)
@@ -378,7 +424,7 @@ export class Bot {
       entryGate: gate, capital: { budget: this.risk.budget(), deployed: this.risk.deployedQuote(this.state), remaining: this.risk.remainingBudget(this.state), quoteBalance: this.mode === "paper" ? quoteBal : this.state.lastBalances?.[this.cfg.QUOTE_CURRENCY]?.available ?? "unknown" },
       positions, performance: performance(this.state, priceOf, this.cfg), leaderboard: this.scanner.leaderboard(10), discrepancies: this.state.discrepancies.slice(-20),
       unmanagedHoldings: this.state.unmanagedHoldings, reconciliation: this.state.reconciliation, api: { ...this.scheduler.stats(), radarIntervalMs: this.radarIntervalMs, authenticated: this.client.authenticated },
-      rejections: this.state.rejections, recentHistory: this.state.history.slice(-10).map((p) => ({ symbol: p.symbol, status: p.status, reason: p.exitReason, net: p.realizedNetPnl, closedAt: p.closedAt }))
+      rejections: this.state.rejections, monthly: this.state.monthly, strategies: { report: strategyReport(this.state.history), status: this.state.strategyStatus || {}, lastQuantCycle: this.quant?.lastSummary || null }, recentHistory: this.state.history.slice(-10).map((p) => ({ symbol: p.symbol, status: p.status, reason: p.exitReason, net: p.realizedNetPnl, closedAt: p.closedAt }))
     };
   }
 

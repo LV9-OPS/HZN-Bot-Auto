@@ -9,7 +9,8 @@ export const POSITION_STATUS = [
   "closing", // exit order in flight
   "closed", // fully exited (moved to history)
   "failed", // entry never filled
-  "needs_reconciliation" // facts could not be established: entries blocked
+  "needs_reconciliation", // facts could not be established: entries blocked
+  "error_locked" // repeated execution failures: no automatic action, manual intervention
 ];
 
 export function emptyState(mode) {
@@ -49,7 +50,7 @@ export function validateState(s) {
       if (!/^[A-Z0-9]+-[A-Z0-9]+$/.test(p.symbol || "")) errs.push(`position ${id} symbol invalid`);
       if (!POSITION_STATUS.includes(p.status)) errs.push(`position ${id} status invalid`);
       if (!Number.isInteger(p.slot) || p.slot < 1 || p.slot > 3) errs.push(`position ${id} slot invalid`);
-      const planOk = isObj(p.plan) && (p.plan.mode === "scalp" ? p.plan.takeProfitPct >= 0 : p.plan.targetMultiple > 1 && p.plan.floorMultiple >= 1);
+      const planOk = isObj(p.plan) && (p.plan.mode === "scalp" ? p.plan.takeProfitPct >= 0 : p.plan.mode === "quant" ? p.plan.stopPrice > 0 : p.plan.targetMultiple > 1 && p.plan.floorMultiple >= 1);
       if (!planOk) errs.push(`position ${id} plan invalid`);
       if (typeof p.allocationQuote !== "number" || !(p.allocationQuote > 0)) errs.push(`position ${id} allocationQuote invalid`);
       if (p.status === "open" || p.status === "closing") {

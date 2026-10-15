@@ -11,6 +11,8 @@
     "stop": "node src/cli/control.js stop",
     "emergency-on": "node src/cli/control.js emergency-on",
     "emergency-off": "node src/cli/control.js emergency-off",
+    "risk-reset": "node src/cli/control.js risk-reset",
+    "research": "node tools/research.js",
     "reconcile": "node src/cli/reconcile.js",
     "adopt": "node src/cli/adopt.js",
     "resolve": "node src/cli/resolve.js",
