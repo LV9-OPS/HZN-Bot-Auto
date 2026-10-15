@@ -1,3 +1,18 @@
+# Test report — v4.0.0 intelligence upgrade (16 Oct 2026)
+
+- **Automated tests: 111/111 pass** (`npm test`). The 26 new tests cover indicators, regimes, regime permissions, costs, risk sizing,
+  portfolio gates (3% monthly, daily, loss streak, drawdown halt, emergency), correlation, the decision engine (stale data, explained rejections,
+  validation gate), the backtester (next-open fills, costs, monthly flatten), metrics, the kill switch, quant exits, ERROR_LOCKED after 3 rejected exits,
+  realised slippage, and two quant end-to-end runs on a fake Revolut X API (refusal without validation; a full breakout entry with an ATR stop in paper mode).
+- **Failure modes covered** (v3 and v4): insufficient balance, delayed response or timeout, partial fill, stale price, missing or malformed data,
+  HTTP 429, restart with an open position, an exit order already in flight, no reliable price (no invented stop), lost connection after an order is sent,
+  and repeated exit rejection (ERROR_LOCKED).
+- **Walk-forward research:** see docs/RESEARCH_2016_2026.md. In short, no strategy is validated for real money. `trend` has a positive but
+  fragile out-of-sample result (+46% over 7.6 years, Sharpe 0.47, max DD 27%, about +0.6% per month on average).
+- **Go/no-go:** **NO-GO for live quant trading.** Paper only, to collect forward data on `trend`.
+
+---
+
 # Test report — v3.0.0 (15 Oct 2026)
 
 ## 1. Static checks

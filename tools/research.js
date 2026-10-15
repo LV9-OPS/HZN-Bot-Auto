@@ -84,8 +84,12 @@ for (const sp of [0.1, 0.2, 0.4]) {
 const verdict = {};
 for (const [s, r] of Object.entries(perStrategy)) {
   const x = r.windowsPassingTrain;
-  const validated = x.trades >= 30 && x.meanNetPct > 0 && x.profitFactor > 1.1 && x.tStat >= 2;
-  verdict[s] = { validated, meanNetPct: x.meanNetPct, n: x.trades, profitFactor: x.profitFactor, tStat: x.tStat, rule: "OOS trades>=30, mean net>0, PF>1.1, t>=2" };
+  const sens = sensitivity[s] || [];
+  const positiveShare = sens.length ? sens.filter((z) => z.netReturnPct > 0).length / sens.length : 0;
+  const costOk = (costSensitivity["spread_0.2"]?.[s]?.netReturnPct ?? -1) > 0;
+  const oosOk = x.trades >= 30 && x.meanNetPct > 0 && x.profitFactor > 1.1 && x.tStat >= 2;
+  const validated = oosOk && positiveShare >= 0.75 && costOk;
+  verdict[s] = { validated, oosOk, positiveParamShare: positiveShare, costOkAtSpread0_2: costOk, meanNetPct: x.meanNetPct, n: x.trades, profitFactor: x.profitFactor, tStat: x.tStat, rule: "OOS trades>=30, mean net>0, PF>1.1, t>=2 AND >=75% of parameter sets profitable over the full period AND profitable at 0.2% spread" };
 }
 const report = {
   generatedAt: new Date().toISOString(), runtimeSec: Math.round((Date.now() - t0) / 1000), data: { source: dir, from: new Date(start).toISOString(), to: new Date(end).toISOString(), assets: Object.keys(assets), excluded },

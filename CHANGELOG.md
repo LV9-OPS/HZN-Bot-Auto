@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.0.0 — 2026-10-16 (intelligence upgrade, branch `rebuild/v3`)
+### Added
+- `ENTRY_MODE=quant`: a 15-minute decision cycle on 1h bars with a 10-step, fully logged decision engine (`data/decisions.<mode>.jsonl`).
+- Market-regime detection (trend, volatility percentile, liquidity stress, extreme moves, BTC market filter) with per-strategy permissions.
+- Candidate strategies: `trend` (time-series momentum), `breakout` (Donchian with volume), `pullback` (oversold dip in an uptrend). All use ATR stops, trailing, time and signal exits.
+- Risk engine: 1% risk per trade with ATR sizing within the 5/3/2 slots, a cost-vs-expected-move gate, a 30-day correlation guard and a volatility target.
+- Portfolio policies: 3% monthly loss limit with flatten, 10% drawdown halt (`npm run risk-reset` after review), loss-streak pause.
+- Strategy kill switch on persistent live degradation, with no in-production re-optimisation.
+- Research stack: `npm run fetch-binance` (2017–2026 hourly data), `npm run research` (walk-forward, baselines, metrics per regime and strategy, parameter and cost sensitivity, deflation-style robustness gates). Writes `data/strategy-validation.json`; live trading requires validation.
+- Explicit state names (ENTRY_PENDING, OPEN, EXIT_PENDING, RECONCILIATION_REQUIRED, ERROR_LOCKED, CLOSED), a per-position audit log, and realised slippage tracking.
+- Scalp and dip modes (from 3.1) are kept as options.
+- 111 automated tests.
+
+### Result
+- No strategy passed the robustness gates (see docs/RESEARCH_2016_2026.md), so live quant trading stays disabled by design. Paper mode can run the `trend` candidate to collect forward evidence.
+
 ## 3.0.0 — 2026-10-15 (branch `rebuild/v3`)
 Complete rebuild. v0.2 is preserved on `main` and `legacy/pre-v3-snapshot`, with a file copy in `backups/pre-v3-*`.
 

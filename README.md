@@ -7,6 +7,14 @@ Bot de trading crypto qui détecte les débuts de mouvement (« early momentum �
 > Aucun profit n'est garanti. Pendant la reconstruction, la stratégie a été rejouée sur les données réelles de 7 jours (8–15 oct. 2026) puis de 21 jours.
 > Sur ces périodes, le signal n'a **pas** couvert les frais, d'où la recommandation **NO-GO pour le live** (voir [docs/TEST_REPORT.md](docs/TEST_REPORT.md)).
 
+## Nouveauté v4 : moteur de décision quantitatif (`ENTRY_MODE=quant`)
+
+- **Cycle :** toutes les 15 minutes, le bot analyse des bougies d'1 heure.
+- **Régime de marché :** il détecte la tendance, la volatilité, le manque de liquidité et les mouvements extrêmes. Il suit aussi la tendance de BTC.
+- **Stratégies candidates :** `trend`, `breakout` et `pullback`. Chaque décision est expliquée et enregistrée dans `data/decisions.<mode>.jsonl`.
+- **Risque :** au plus 1 % du capital par trade, avec un stop calé sur la volatilité (ATR). S'y ajoutent une limite mensuelle de −3 % (le bot vend tout et ne rachète plus jusqu'au mois suivant), un arrêt des achats à −10 % depuis le plus haut, une pause après plusieurs pertes d'affilée et un filtre de corrélation.
+- **Validation :** `npm run research` teste les stratégies sur 2017–2026 par walk-forward (réglage sur 12 mois, test sur les 3 mois suivants, puis on décale). **Seule une stratégie validée peut trader en réel. Aujourd'hui, aucune ne l'est** (voir [docs/RESEARCH_2016_2026.md](docs/RESEARCH_2016_2026.md)).
+
 ## Ce que fait le bot
 
 1. **Radar (toutes les ~5 s) :** une seule requête de prix pour tout le marché. Le bot filtre les paires `*-USDC` actives selon le spread et la liquidité,

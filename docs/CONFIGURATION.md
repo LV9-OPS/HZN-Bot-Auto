@@ -30,6 +30,18 @@ Secrets (never printed, never sent to Discord): `REVOLUT_API_KEY`, `DISCORD_WEBH
 | `PLAN_SLOT1` | string | 2:1 |  | target:floor multiples for slot 1 (X2 then floor X1) |
 | `PLAN_SLOT2` | string | 3:2 |  | slot 2 (X3 then floor X2) |
 | `PLAN_SLOT3` | string | 3:2 |  | slot 3 (X3 then floor X2) |
+| `ENTRY_MODE` | enum | momentum | momentum / dip / quant | momentum = early 1m breakout; dip = buy a sharp 15m drop; quant = 1h regime-aware decision engine (trend/breakout/pullback) |
+| `QUANT_STRATEGIES` | list | TREND,BREAKOUT,PULLBACK |  | quant: candidate strategies (trend, breakout, pullback) |
+| `QUANT_REQUIRE_VALIDATION` | bool | true |  | quant: only strategies validated out-of-sample (data/strategy-validation.json) may trade |
+| `QUANT_CYCLE_MS` | int | 900000 | 60000 – 3600000 | quant: decision cycle (15 min) |
+| `RISK_PER_TRADE_PCT` | num | 1 | 0.1 – 5 | quant: planned max loss per trade (stop + costs) as % of equity |
+| `MAX_CORRELATION` | num | 0.8 | 0 – 1 | quant: reject a position whose 30-day 1h return correlation with an open one exceeds this |
+| `DIP_MIN_DROP_15M_PCT` | num | 2 | 0.5 – 20 | dip: minimum 15-minute drop |
+| `EXIT_MODE` | enum | plan | plan / scalp | plan = X2/X3 profit plans; scalp = small take-profit, trailing stop, max holding time |
+| `SCALP_TAKE_PROFIT_PCT` | num | 1.5 | 0 – 50 | scalp: sell when bid >= entry +X% (0 = off) |
+| `SCALP_TRAIL_ACTIVATION_PCT` | num | 0 | 0 – 50 | scalp: arm a trailing stop once bid >= entry +X% (0 = off) |
+| `SCALP_TRAIL_DISTANCE_PCT` | num | 0.5 | 0.05 – 20 | scalp: trailing stop distance below the highest bid |
+| `SCALP_MAX_HOLD_MIN` | int | 0 | 0 – 100000 | scalp: exit after this many minutes (0 = off) |
 | `EXIT_LIMIT_SLIPPAGE_PCT` | num | 0.5 | 0.05 – 5 | IOC sell limit placed this far below bid |
 | `EXIT_MAX_IOC_ATTEMPTS` | int | 3 | 1 – 10 | IOC attempts before market fallback (stop/emergency only) |
 | `EXIT_MARKET_FALLBACK` | bool | true |  | Use a market sell when IOC attempts fail for stop-loss/emergency exits |
@@ -51,6 +63,11 @@ Secrets (never printed, never sent to Discord): `REVOLUT_API_KEY`, `DISCORD_WEBH
 | `SIGNAL_REFERENCE_QUOTES` | list | USD,EUR,USDC |  | Quotes considered as momentum reference market (most liquid wins) |
 | `MAX_DAILY_LOSS_QUOTE` | num | 1.5 | 0.1 – 10 | Realized net loss that blocks new entries for the day |
 | `MAX_TRADES_PER_DAY` | int | 8 | 1 – 100 | Max entries per day |
+| `MONTHLY_LOSS_PCT` | num | 3 | 0.5 – 50 | Realized net loss this month (% of month-start equity) that blocks new entries until next month |
+| `MONTHLY_LIMIT_ACTION` | enum | flatten | flatten / block | On the monthly loss limit: flatten = sell all bot positions and block entries until next month; block = block entries only |
+| `MAX_DRAWDOWN_PCT` | num | 10 | 1 – 90 | Realized drawdown from peak (vs budget) that halts entries until manual reset (npm run risk-reset) |
+| `LOSS_STREAK_PAUSE` | int | 3 | 0 – 50 | Consecutive losing trades that pause entries (0 = off) |
+| `LOSS_STREAK_PAUSE_HOURS` | int | 24 | 1 – 720 | Pause length after a losing streak |
 | `RISK_DAY_TIMEZONE` | string | Europe/Paris |  | Time zone for the daily risk reset |
 | `RADAR_INTERVAL_MS` | int | 5000 | 2000 – 120000 | Broad ticker radar |
 | `POSITION_INTERVAL_MS` | int | 2000 | 1000 – 60000 | Open-position price check |

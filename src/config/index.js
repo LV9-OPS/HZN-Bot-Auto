@@ -198,6 +198,7 @@ export function buildConfig(env = process.env) {
   }
   if (cfg.DISCORD_WEBHOOK_URL && !/^https:\/\/(discord(app)?\.com)\/api\/webhooks\//.test(cfg.DISCORD_WEBHOOK_URL)) errors.push("DISCORD_WEBHOOK_URL is not a Discord webhook URL");
 
+  if (cfg.BOT_MODE === "live" && cfg.ENTRY_MODE === "quant" && !cfg.QUANT_REQUIRE_VALIDATION) errors.push("Live quant trading requires QUANT_REQUIRE_VALIDATION=true (only out-of-sample validated strategies may trade real money)");
   if (cfg.BOT_MODE === "live") {
     if (!cfg.credentialsPresent) errors.push("Live mode requires REVOLUT_API_KEY and REVOLUT_PRIVATE_KEY_PATH");
     if (cfg.LIVE_TRADING_CONFIRMATION !== LIVE_CONFIRMATION_PHRASE) errors.push(`Live mode requires LIVE_TRADING_CONFIRMATION=${LIVE_CONFIRMATION_PHRASE}`);
