@@ -64,7 +64,7 @@ try {
   for (const p of Object.values(store.state.positions)) console.log(`  ${p.symbol} slot ${p.slot} ${p.plan.name} status ${p.status} qty ${p.qty} entry ${p.entryPrice} targetReached ${p.targetReached} origin ${p.origin}`);
   for (const h of store.state.unmanagedHoldings) console.log(`  UNMANAGED ${h.currency} ${h.total} (~${h.valueQuote} USDC)`);
   console.log("\n== Notifications that would be sent ==");
-  for (const m of messages) console.log("  - " + m.split("\n").slice(1).join(" / ").slice(0, 300));
+  for (const m of messages) console.log("  - " + m.replace(/\n/g, " / ").slice(0, 400));
   console.log("\nNothing was written, ordered or cancelled.");
 } catch (e) {
   console.error("Reconciliation dry run failed:", e.message);

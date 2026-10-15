@@ -13,8 +13,10 @@
     "emergency-off": "node src/cli/control.js emergency-off",
     "reconcile": "node src/cli/reconcile.js",
     "adopt": "node src/cli/adopt.js",
+    "resolve": "node src/cli/resolve.js",
     "fetch-history": "node tools/fetch-history.js",
     "replay": "node tools/replay.js",
+    "account": "node tools/account-report.js",
     "check": "node tools/check-syntax.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
   },

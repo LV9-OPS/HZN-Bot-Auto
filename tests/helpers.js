@@ -104,6 +104,9 @@ export class StubMarket {
   async refreshPairs() {
     return this.pairs;
   }
+  async refreshAllTickers() {
+    return this.refreshTickers();
+  }
   async refreshTickers() {
     for (const [s, t] of this.tickers) this.tickers.set(s, { ...t, ts: this.clock.now() });
     return this.tickers;

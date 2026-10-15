@@ -78,14 +78,16 @@ export class Reconciler {
       const registry = this.journal.loadOrders();
       const positions = () => Object.values(this.state.positions);
 
-      // Prices for valuation of holdings
-      const heldSymbols = [];
-      for (const [cur] of balances) if (!STABLE_OR_FIAT.has(cur)) heldSymbols.push(`${cur}-${this.cfg.QUOTE_CURRENCY}`);
-      for (const p of positions()) heldSymbols.push(p.symbol);
-      const known = [...new Set(heldSymbols)].filter((s) => this.market.pair(s));
-      if (known.length) {
-        try { await this.market.refreshTickers(known, PRIORITY.RECONCILE); } catch (e) { report.warnings.push("ticker refresh failed: " + e.message); }
-      }
+      // Prices for valuation of holdings: one request for the whole market.
+      try { await this.market.refreshAllTickers(PRIORITY.RECONCILE); } catch (e) { report.warnings.push("ticker refresh failed: " + e.message); }
+      this.state.lastBalances = Object.fromEntries([...balances].filter(([, b]) => b.total > 0).map(([c, b]) => [c, { total: b.total, available: b.available, reserved: b.reserved }]));
+      const valueOf = (cur, qty) => {
+        for (const q of [this.cfg.QUOTE_CURRENCY, "USD", "EUR"]) {
+          const t = this.market.tickers.get(`${cur}-${q}`);
+          if (t?.valid) return qty * t.bid; // approximate (EUR/USD treated ~1:1, only used for dust/info)
+        }
+        return NaN;
+      };
 
       // 2. Historical orders (needed for lost fills, external sells, recovery)
       let history = null;
@@ -168,8 +170,7 @@ export class Reconciler {
         if (STABLE_OR_FIAT.has(cur) || !(bal.total > 0)) continue;
         const sym = `${cur}-${this.cfg.QUOTE_CURRENCY}`;
         if (positions().some((p) => splitSymbol(p.symbol).base === cur)) continue;
-        const tk = this.market.tickers.get(sym);
-        const value = tk?.valid ? bal.total * tk.bid : NaN;
+        const value = valueOf(cur, bal.total);
         if (Number.isFinite(value) && value < this.cfg.DUST_THRESHOLD_QUOTE) continue; // dust: ignored, never traded
         const recovered = await this.#recoverOrphan(cur, sym, bal, history, registry, report);
         if (!recovered) unmanaged.push({ currency: cur, total: bal.total, valueQuote: Number.isFinite(value) ? Number(value.toFixed(4)) : null, note: "not created by this bot (no matching client_order_id) - not managed" });
