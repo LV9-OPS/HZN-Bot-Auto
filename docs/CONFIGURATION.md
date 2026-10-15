@@ -33,6 +33,7 @@ Secrets (never printed, never sent to Discord): `REVOLUT_API_KEY`, `DISCORD_WEBH
 | `ENTRY_MODE` | enum | momentum | momentum / dip / quant | momentum = early 1m breakout; dip = buy a sharp 15m drop; quant = 1h regime-aware decision engine (trend/breakout/pullback) |
 | `QUANT_STRATEGIES` | list | TREND,BREAKOUT,PULLBACK |  | quant: candidate strategies (trend, breakout, pullback) |
 | `QUANT_REQUIRE_VALIDATION` | bool | true |  | quant: only strategies validated out-of-sample (data/strategy-validation.json) may trade |
+| `QUANT_LIVE_UNVALIDATED_ACK` | string | (empty) |  | Owner acknowledgement to trade NON-validated quant strategies with real money: I_ACCEPT_UNVALIDATED_STRATEGY |
 | `QUANT_CYCLE_MS` | int | 900000 | 60000 – 3600000 | quant: decision cycle (15 min) |
 | `RISK_PER_TRADE_PCT` | num | 1 | 0.1 – 5 | quant: planned max loss per trade (stop + costs) as % of equity |
 | `MAX_CORRELATION` | num | 0.8 | 0 – 1 | quant: reject a position whose 30-day 1h return correlation with an open one exceeds this |

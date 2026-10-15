@@ -100,3 +100,8 @@ test("stats track wins, losses, fees and drawdown net of fees", () => {
   assert.ok(Math.abs(s.stats.totalFees - 0.03) < 1e-12);
   assert.ok(Math.abs(s.stats.maxDrawdown - 0.5) < 1e-12);
 });
+
+test("live quant with non-validated strategies needs an explicit owner acknowledgement", () => {
+  const base = { BOT_MODE: "live", LIVE_TRADING_CONFIRMATION: "I_ACCEPT_REAL_MONEY_RISK", REVOLUT_API_KEY: "a".repeat(64), ENTRY_MODE: "quant", QUANT_REQUIRE_VALIDATION: "false" };
+  assert.throws(() => buildConfig(base), /QUANT_LIVE_UNVALIDATED_ACK/);
+});

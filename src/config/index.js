@@ -47,6 +47,7 @@ export const SPEC = {
   ENTRY_MODE: { type: "enum", enum: ["momentum", "dip", "quant"], def: "momentum", desc: "momentum = early 1m breakout; dip = buy a sharp 15m drop; quant = 1h regime-aware decision engine (trend/breakout/pullback)" },
   QUANT_STRATEGIES: { type: "list", def: ["TREND", "BREAKOUT", "PULLBACK"], desc: "quant: candidate strategies (trend, breakout, pullback)" },
   QUANT_REQUIRE_VALIDATION: { type: "bool", def: true, desc: "quant: only strategies validated out-of-sample (data/strategy-validation.json) may trade" },
+  QUANT_LIVE_UNVALIDATED_ACK: { type: "string", def: "", desc: "Owner acknowledgement to trade NON-validated quant strategies with real money: I_ACCEPT_UNVALIDATED_STRATEGY" },
   QUANT_CYCLE_MS: { type: "int", def: 900000, min: 60000, max: 3600000, desc: "quant: decision cycle (15 min)" },
   RISK_PER_TRADE_PCT: { type: "num", def: 1, min: 0.1, max: 5, desc: "quant: planned max loss per trade (stop + costs) as % of equity" },
   MAX_CORRELATION: { type: "num", def: 0.8, min: 0, max: 1, desc: "quant: reject a position whose 30-day 1h return correlation with an open one exceeds this" },
@@ -198,7 +199,7 @@ export function buildConfig(env = process.env) {
   }
   if (cfg.DISCORD_WEBHOOK_URL && !/^https:\/\/(discord(app)?\.com)\/api\/webhooks\//.test(cfg.DISCORD_WEBHOOK_URL)) errors.push("DISCORD_WEBHOOK_URL is not a Discord webhook URL");
 
-  if (cfg.BOT_MODE === "live" && cfg.ENTRY_MODE === "quant" && !cfg.QUANT_REQUIRE_VALIDATION) errors.push("Live quant trading requires QUANT_REQUIRE_VALIDATION=true (only out-of-sample validated strategies may trade real money)");
+  if (cfg.BOT_MODE === "live" && cfg.ENTRY_MODE === "quant" && !cfg.QUANT_REQUIRE_VALIDATION && cfg.QUANT_LIVE_UNVALIDATED_ACK !== "I_ACCEPT_UNVALIDATED_STRATEGY") errors.push("Live quant trading with non-validated strategies requires QUANT_LIVE_UNVALIDATED_ACK=I_ACCEPT_UNVALIDATED_STRATEGY (explicit owner decision); otherwise set QUANT_REQUIRE_VALIDATION=true");
   if (cfg.BOT_MODE === "live") {
     if (!cfg.credentialsPresent) errors.push("Live mode requires REVOLUT_API_KEY and REVOLUT_PRIVATE_KEY_PATH");
     if (cfg.LIVE_TRADING_CONFIRMATION !== LIVE_CONFIRMATION_PHRASE) errors.push(`Live mode requires LIVE_TRADING_CONFIRMATION=${LIVE_CONFIRMATION_PHRASE}`);
