@@ -1,9 +1,22 @@
 {
   "name": "hzn-bot-auto",
-  "version": "0.2.0",
+  "version": "3.0.0",
   "private": true,
+  "description": "Early-momentum crypto trading bot for the Revolut X API (paper by default)",
   "type": "module",
-  "scripts": { "start": "node src/index.js", "scan": "node src/scanner.js", "health": "node src/health.js" },
-  "engines": { "node": ">=20" },
-  "dependencies": { "dotenv": "^17.2.2" }
+  "engines": { "node": ">=20.12" },
+  "scripts": {
+    "start": "node src/index.js",
+    "status": "node src/cli/status.js",
+    "stop": "node src/cli/control.js stop",
+    "emergency-on": "node src/cli/control.js emergency-on",
+    "emergency-off": "node src/cli/control.js emergency-off",
+    "reconcile": "node src/cli/reconcile.js",
+    "adopt": "node src/cli/adopt.js",
+    "fetch-history": "node tools/fetch-history.js",
+    "replay": "node tools/replay.js",
+    "check": "node tools/check-syntax.js",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
+  },
+  "dependencies": {}
 }

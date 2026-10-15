@@ -1,9 +1,17 @@
+# dependencies
 node_modules/
+
+# secrets - never commit
 .env
 .env.*
 !.env.example
-data/*.json
-*.log
+*.pem
+*.key
 HZN-Secrets/
-private.pem
-public.pem
+
+# runtime data
+data/*
+!data/.gitkeep
+logs/
+backups/
+*.log
