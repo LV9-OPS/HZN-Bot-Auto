@@ -124,3 +124,29 @@ test("stage D rejects an inactive pair / missing quote", () => {
   const r2 = confirmEntry({ signal, ticker: fresh(100, 100.1), pair: { ...pair, status: "inactive" }, allocationQuote: 5, now, cfg });
   assert.ok(r2.reasons.some((x) => x.code === "pair_inactive"));
 });
+
+// ---------------------------------------------------------------- scalp mode
+const SC = { mode: "scalp", takeProfitPct: 1.5, trailActivationPct: 1, trailDistancePct: 0.4, maxHoldMin: 60, name: "scalp" };
+test("scalp: take-profit at +X% on the bid", () => {
+  assert.equal(evaluateExit(pos(SC), ok(1.0149), { ...SL, now: 0 }).reason, null);
+  assert.equal(evaluateExit(pos(SC), ok(1.015), { ...SL, now: 0 }).reason, "TAKE_PROFIT");
+});
+test("scalp: trailing stop arms at +activation and exits on pullback", () => {
+  const d = evaluateExit(pos(SC), ok(1.012), { ...SL, now: 0 });
+  assert.equal(d.updates.targetReached, true);
+  const p = pos(SC, { peakBid: 1.012, targetReached: true });
+  assert.equal(evaluateExit(p, ok(1.009), { ...SL, now: 0 }).action, "hold");
+  assert.equal(evaluateExit(p, ok(1.0079), { ...SL, now: 0 }).reason, "TRAILING_STOP");
+});
+test("scalp: stop-loss and max holding time", () => {
+  assert.equal(evaluateExit(pos(SC), ok(0.97), { ...SL, now: 0 }).reason, "STOP_LOSS");
+  const p = pos(SC, { openedAt: new Date(0).toISOString() });
+  assert.equal(evaluateExit(p, ok(1.001), { ...SL, now: 59 * 60000 }).action, "hold");
+  assert.equal(evaluateExit(p, ok(1.001), { ...SL, now: 60 * 60000 }).reason, "TIME_EXIT");
+});
+test("scalp config builds scalp plans for every slot and validates", async () => {
+  const { buildConfig } = await import("../../src/config/index.js");
+  const c = buildConfig({ EXIT_MODE: "scalp", SCALP_TAKE_PROFIT_PCT: "1.5" });
+  assert.equal(c.plans[0].mode, "scalp");
+  assert.throws(() => buildConfig({ EXIT_MODE: "scalp", SCALP_TAKE_PROFIT_PCT: "0" }), /needs a take-profit/);
+});

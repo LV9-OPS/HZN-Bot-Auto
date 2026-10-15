@@ -111,3 +111,15 @@ test("the scanner may return zero candidates on a quiet market", () => {
   const f = computeFeatures(genCandles({ n: 150 }));
   assert.equal(scoreCandidate(f, exec, opts).qualified, false);
 });
+
+import { scoreDip } from "../../src/signals/scoring.js";
+test("dip entry: sharp 15m drop that stopped falling qualifies; a still-falling or crashing market does not", () => {
+  const drop = Array.from({ length: 14 }, () => ({ ret: -0.2, vol: 2 }));
+  const f = computeFeatures(genCandles({ tail: [...drop, { ret: 0.05, vol: 2 }] }));
+  assert.ok(f.ret15 <= -2.5);
+  assert.equal(scoreDip(f, exec, { ...opts, minScore: 0 }).qualified, true);
+  const falling = computeFeatures(genCandles({ tail: [...drop, { ret: -0.5, vol: 2 }] }));
+  assert.ok(scoreDip(falling, exec, { ...opts, minScore: 0 }).rejections.some((r) => r.code === "still_falling"));
+  const quiet = computeFeatures(genCandles({}));
+  assert.ok(scoreDip(quiet, exec, { ...opts, minScore: 0 }).rejections.some((r) => r.code === "no_dip"));
+});

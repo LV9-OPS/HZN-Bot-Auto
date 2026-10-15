@@ -212,7 +212,7 @@ export class Bot {
           await this.orders.exitPosition(p, p.exitReason || "RESUME_EXIT");
           continue;
         }
-        const d = evaluateExit(p, price, { stopLossPct: this.cfg.STOP_LOSS_PCT });
+        const d = evaluateExit(p, price, { stopLossPct: this.cfg.STOP_LOSS_PCT, now: this.clock.now() });
         let changed = false;
         if (d.updates.peakBid && d.updates.peakBid !== p.peakBid) { p.peakBid = d.updates.peakBid; }
         if (d.updates.targetReached) {
@@ -222,7 +222,7 @@ export class Bot {
         }
         if (changed) {
           this.store.save({ backup: true }); // persisted BEFORE any further action: survives restarts
-          this.notifier.targetReached(p);
+          if (p.plan.mode !== "scalp") this.notifier.targetReached(p);
           this.journal.event("target_reached", { id: p.id, symbol: p.symbol, bid: price.bid });
         }
         if (d.action === "exit") {

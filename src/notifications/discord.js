@@ -95,6 +95,13 @@ export class DiscordNotifier {
   #protection(p) {
     if (!(p.entryPrice > 0)) return "Protection : en attente du remplissage";
     const lv = planLevels(p, this.cfg.STOP_LOSS_PCT);
+    if (p.plan.mode === "scalp") {
+      const parts = [`Stop-loss -${this.cfg.STOP_LOSS_PCT}% à ${fmt(lv.stopPrice, 6)}`];
+      if (Number.isFinite(lv.targetPrice)) parts.push(`take-profit +${p.plan.takeProfitPct}% à ${fmt(lv.targetPrice, 6)}`);
+      if (p.plan.trailActivationPct > 0) parts.push(`trailing ${p.plan.trailDistancePct}% dès +${p.plan.trailActivationPct}%${p.targetReached ? " (ARMÉ)" : ""}`);
+      if (p.plan.maxHoldMin > 0) parts.push(`sortie après ${p.plan.maxHoldMin} min`);
+      return `Protection : ${parts.join(" | ")} — surveillance LOGICIELLE (aucun stop natif Revolut X via API; inactive si le bot est arrêté)`;
+    }
     const native = p.protection?.nativeOrderIds?.length ? ` + ordre natif détecté (${p.protection.nativeOrderIds.length})` : "";
     const base = p.targetReached
       ? `Plancher ARMÉ à X${p.plan.floorMultiple} = ${fmt(lv.floorPrice, 6)} (objectif X${p.plan.targetMultiple} atteint)`
@@ -141,7 +148,7 @@ export class DiscordNotifier {
   }
 
   exitTriggered(p, reason, bid) {
-    const label = reason === "STOP_LOSS" ? `🛑 STOP-LOSS déclenché (-${this.cfg.STOP_LOSS_PCT}%)` : reason.startsWith("X") ? `📉 Retour au plancher (${reason})` : `⚠️ Sortie (${reason})`;
+    const label = reason === "STOP_LOSS" ? `🛑 STOP-LOSS déclenché (-${this.cfg.STOP_LOSS_PCT}%)` : reason === "TAKE_PROFIT" ? `✅ Take-profit atteint` : reason === "TRAILING_STOP" ? `📉 Trailing stop` : reason === "TIME_EXIT" ? `⏱️ Durée max atteinte` : reason.startsWith("X") ? `📉 Retour au plancher (${reason})` : `⚠️ Sortie (${reason})`;
     this.send(`${label} sur **${p.symbol}** — bid ${fmt(bid, 6)} | entrée ${fmt(p.entryPrice, 6)}\n${this.#pnl(p).line}\nEnvoi d'un ordre de vente…`, { key: `exit-${p.id}-${reason}`, cooldownMs: 10 * 60000 });
   }
 

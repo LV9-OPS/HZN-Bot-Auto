@@ -10,11 +10,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { computeFeatures } from "../src/signals/earlyMomentum.js";
-import { scoreCandidate, DEFAULT_SIGNAL_PARAMS } from "../src/signals/scoring.js";
+import { scoreCandidate, scoreDip, DEFAULT_SIGNAL_PARAMS } from "../src/signals/scoring.js";
 import { evaluateExit } from "../src/strategy/profitPlan.js";
 import { arg } from "../src/cli/common.js";
 
-export function runReplay({ series, meta, cfg, params = {}, minScore = 62, cooldownMin = 60, window = 200 }) {
+export function runReplay({ series, meta, cfg, params = {}, minScore = 62, cooldownMin = 60, window = 200, precomputed = null, collect = null }) {
   const fee = cfg.TAKER_FEE_PCT / 100;
   const slip = cfg.EST_SLIPPAGE_PCT / 100;
   const slots = cfg.SLOT_ALLOCATIONS.slice(0, cfg.MAX_OPEN_POSITIONS);
@@ -58,19 +58,26 @@ export function runReplay({ series, meta, cfg, params = {}, minScore = 62, coold
       const c = series[ref][i];
       const spread = (p.asset.execSpreadPct ?? 0.2) / 100;
       const bidOf = (x) => x * (1 - spread / 2);
-      // check worst case first (low), then high for target arming, then close
+      // check worst case first (low), then high, then close (conservative intrabar ordering)
       const order = [bidOf(c.open), bidOf(c.low), bidOf(c.high), bidOf(c.close)];
       for (const bid of order) {
-        const d = evaluateExit(p, { bid, reliable: true }, { stopLossPct: cfg.STOP_LOSS_PCT });
+        const d = evaluateExit(p, { bid, reliable: true }, { stopLossPct: cfg.STOP_LOSS_PCT, now: t + 59000 });
+        if (d.updates.peakBid) p.peakBid = d.updates.peakBid;
         if (d.updates.targetReached) p.targetReached = true;
         if (d.action === "exit") {
-          const level = d.reason === "STOP_LOSS" ? d.levels.stopPrice : d.levels.floorPrice;
-          const fillBid = Math.min(level, bidOf(c.open) < level ? bidOf(c.open) : level) * (1 - slip);
+          const openBid = bidOf(c.open);
+          let fillBid;
+          if (d.reason === "TAKE_PROFIT") fillBid = Math.max(d.levels.targetPrice, openBid) * (1 - slip);
+          else if (d.reason === "TIME_EXIT") fillBid = bid * (1 - slip);
+          else {
+            const level = d.reason === "STOP_LOSS" ? d.levels.stopPrice : d.reason === "TRAILING_STOP" ? d.levels.trailStopPrice : d.levels.floorPrice;
+            fillBid = Math.min(level, openBid) * (1 - slip); // gaps are not filled at the trigger
+          }
           const proceeds = p.qty * fillBid * (1 - fee);
           const pnl = proceeds - p.cost;
           cash += proceeds;
           realized += pnl;
-          trades.push({ ref, exec: p.asset.exec, slot: p.slot, entry: p.entryPrice, exit: fillBid, reason: d.reason, pnl, holdMin: (t - p.openedAt) / 60000, score: p.score, openedAt: new Date(p.openedAt).toISOString() });
+          trades.push({ ref, exec: p.asset.exec, slot: p.slot, entry: p.entryPrice, exit: fillBid, reason: d.reason, pnl, pnlPct: (pnl / p.cost) * 100, holdMin: (t - p.openedAt) / 60000, score: p.score, openedAt: new Date(p.openedAt).toISOString() });
           open.delete(ref);
           cooldown[ref] = t + cooldownMin * 60000;
           break;
@@ -83,11 +90,21 @@ export function runReplay({ series, meta, cfg, params = {}, minScore = 62, coold
     for (const a of assets) {
       const i = idx[a.ref].get(t);
       if (i === undefined || i < 80) continue;
-      const hist = series[a.ref].slice(Math.max(0, i - window + 1), i + 1);
-      const f = computeFeatures(hist);
-      const res = scoreCandidate(f, { spreadPct: a.execSpreadPct ?? 0.2, quoteVolume24h: Infinity, active: true }, { params, minScore, maxSpreadPct: cfg.MAX_SPREAD_PCT, minExecQuoteVolume: 0 });
-      for (const r of res.rejections) rejectionCounts[r.code] = (rejectionCounts[r.code] || 0) + 1;
-      if (!res.qualified) continue;
+      let res, f;
+      if (precomputed) {
+        const hit = precomputed.get(`${a.ref}|${t}`);
+        if (!hit || hit.score < minScore) continue;
+        res = { score: hit.score, qualified: true };
+        f = hit.f;
+      } else {
+        const hist = series[a.ref].slice(Math.max(0, i - window + 1), i + 1);
+        f = computeFeatures(hist);
+        const ex = { spreadPct: a.execSpreadPct ?? 0.2, quoteVolume24h: Infinity, active: true };
+        res = cfg.ENTRY_MODE === "dip" ? scoreDip(f, ex, { minScore, maxSpreadPct: cfg.MAX_SPREAD_PCT, minExecQuoteVolume: 0, dipParams: { minDrop15: cfg.DIP_MIN_DROP_15M_PCT } }) : scoreCandidate(f, ex, { params, minScore, maxSpreadPct: cfg.MAX_SPREAD_PCT, minExecQuoteVolume: 0 });
+        for (const r of res.rejections) rejectionCounts[r.code] = (rejectionCounts[r.code] || 0) + 1;
+        if (collect && f && res.rejections.every((r) => r.code === "score_below_min")) collect.set(`${a.ref}|${t}`, { score: res.score, f: { close: f.close, ret1: f.ret1, ret5: f.ret5, ret15: f.ret15, ret60: f.ret60, relVol5: f.relVol5 } });
+        if (!res.qualified) continue;
+      }
       const fwd = (k) => (series[a.ref][i + k] ? ((series[a.ref][i + k].close - f.close) / f.close) * 100 : null);
       signals.push({ ref: a.ref, t, score: res.score, ret5: f.ret5, ret60: f.ret60, relVol5: f.relVol5, fwd5: fwd(5), fwd15: fwd(15), fwd60: fwd(60) });
       if (!open.has(a.ref) && !(cooldown[a.ref] > t)) pending.push({ asset: a, score: res.score });
@@ -142,7 +159,7 @@ export function runReplay({ series, meta, cfg, params = {}, minScore = 62, coold
     baselineForward: { fwd5: stat(base.fwd5), fwd15: stat(base.fwd15), fwd60: stat(base.fwd60) },
     signalRet60AtEntry: stat(signals.map((s) => s.ret60)),
     topRejections: Object.entries(rejectionCounts).sort((a, b) => b[1] - a[1]).slice(0, 10),
-    tradeList: trades.slice(-50)
+    tradeList: trades.slice(-5000)
   };
 }
 

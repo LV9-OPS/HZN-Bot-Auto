@@ -9,7 +9,7 @@
 //  Stage C (ranking): explainable score + named rejection reasons (signals/scoring.js).
 //  Stage D (entry confirmation) lives in strategy/entryConfirm.js.
 import { computeFeatures } from "../signals/earlyMomentum.js";
-import { scoreCandidate, explain } from "../signals/scoring.js";
+import { scoreCandidate, scoreDip, explain } from "../signals/scoring.js";
 import { PRIORITY } from "../api/scheduler.js";
 
 export class Scanner {
@@ -45,8 +45,8 @@ export class Scanner {
       const ch3 = this.market.snapshotChange(ref, 180000);
       const ch5 = this.market.snapshotChange(ref, 300000);
       const accel = Number.isFinite(ch1) && Number.isFinite(ch3) ? ch1 - (ch3 - ch1) / 2 : NaN; // last minute vs average of the 2 before
-      const radarScore = (Number.isFinite(ch1) ? Math.max(0, ch1) * 3 : 0) + (Number.isFinite(ch3) ? Math.max(0, ch3) : 0) + (Number.isFinite(accel) ? Math.max(0, accel) * 2 : 0);
-      const flagged = reasons.length === 0 && ((ch1 >= 0.12) || (ch3 >= 0.3) || (accel >= 0.1));
+      const radarScore = this.cfg.ENTRY_MODE === "dip" ? Math.max(0, -(Number.isFinite(ch5) ? ch5 : 0)) : (Number.isFinite(ch1) ? Math.max(0, ch1) * 3 : 0) + (Number.isFinite(ch3) ? Math.max(0, ch3) : 0) + (Number.isFinite(accel) ? Math.max(0, accel) * 2 : 0);
+      const flagged = reasons.length === 0 && (this.cfg.ENTRY_MODE === "dip" ? ch5 <= -1 || ch3 <= -0.8 : (ch1 >= 0.12) || (ch3 >= 0.3) || (accel >= 0.1));
       out.push({ base: pair.base, exec: pair.symbol, ref, stageA: { ok: reasons.length === 0, reasons }, radar: { ch1, ch3, ch5, accel, radarScore, flagged }, at: now });
     }
     this.universe = out;
@@ -74,12 +74,11 @@ export class Scanner {
         const candles = await this.market.closedCandles(u.ref, { maxAgeMs: flagged ? 15000 : this.cfg.CANDLE_REFRESH_MS, priority: flagged ? PRIORITY.DEEP - 1 : PRIORITY.DEEP });
         const f = computeFeatures(candles);
         const exec = this.market.tickers.get(u.exec);
-        const res = scoreCandidate(f, exec ? { spreadPct: exec.spreadPct, quoteVolume24h: exec.quoteVolume24h, active: true } : null, {
-          params: this.signalParams,
-          minScore: this.cfg.MIN_SCORE,
-          maxSpreadPct: this.cfg.MAX_SPREAD_PCT,
-          minExecQuoteVolume: this.cfg.MIN_EXEC_QUOTE_VOLUME_24H
-        });
+        const execInfo = exec ? { spreadPct: exec.spreadPct, quoteVolume24h: exec.quoteVolume24h, active: true } : null;
+        const common = { minScore: this.cfg.MIN_SCORE, maxSpreadPct: this.cfg.MAX_SPREAD_PCT, minExecQuoteVolume: this.cfg.MIN_EXEC_QUOTE_VOLUME_24H };
+        const res = this.cfg.ENTRY_MODE === "dip"
+          ? scoreDip(f, execInfo, { ...common, minScore: 0, dipParams: { minDrop15: this.cfg.DIP_MIN_DROP_15M_PCT } })
+          : scoreCandidate(f, execInfo, { ...common, params: this.signalParams });
         for (const r of res.rejections) this.rejectionCounts[r.code] = (this.rejectionCounts[r.code] || 0) + 1;
         this.results.set(u.base, { base: u.base, exec: u.exec, ref: u.ref, score: res.score, qualified: res.qualified, rejections: res.rejections, components: res.components, explanation: explain(res, f), features: f, flagged, at: now, execAsk: exec?.ask });
       } catch (e) {

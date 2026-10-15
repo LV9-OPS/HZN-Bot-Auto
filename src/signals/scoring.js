@@ -92,3 +92,43 @@ export function explain(result, f) {
   const facts = f ? `5m ${fmt(f.ret5, 2)}% | 3m ${fmt(f.ret3, 2)}% | 60m ${fmt(f.ret60, 2)}% | vol x${fmt(f.relVol5, 1)} | accel ${fmt(f.accel3, 3)}%/min | breakout ${f.breakoutConfirmed ? "yes " + fmt(f.breakoutPct, 2) + "%" : "no"}` : "";
   return `score ${result.score.toFixed(1)} [${parts.join(", ")}] ${facts}`;
 }
+
+/**
+ * "dip" entry (mean reversion): buy a sharp, recent drop that has stopped falling.
+ * Rationale (measured on 21 days of Revolut X reference data, Sep-Oct 2026): after a 15-minute
+ * drop of 2% or more, prices rebounded on average while 1-minute bursts up tended to fade.
+ * This is an empirical, regime-dependent effect - validate it with `npm run replay` regularly.
+ */
+export const DEFAULT_DIP_PARAMS = Object.freeze({
+  minDrop15: 2.0, // ret15 must be <= -2%
+  maxDrop60: 10.0, // ret60 must be > -10% (avoid crashes / delisting events)
+  minRet1: -0.15, // last closed minute no longer falling hard (stabilisation)
+  maxSyntheticShare: 0.85
+});
+
+export function scoreDip(f, exec, opts = {}) {
+  const p = { ...DEFAULT_DIP_PARAMS, ...(opts.dipParams || {}) };
+  const rejections = [];
+  const reject = (code, detail) => rejections.push({ code, detail });
+  if (!f) return { score: 0, rejections: [{ code: "insufficient_data", detail: "not enough closed candles" }], components: {}, qualified: false };
+  if (exec) {
+    if (exec.active === false) reject("pair_inactive", "execution pair inactive");
+    if (!(exec.spreadPct >= 0)) reject("no_quote", "no valid bid/ask on execution pair");
+    else if (exec.spreadPct > (opts.maxSpreadPct ?? 0.4)) reject("spread_too_wide", `spread ${fmt(exec.spreadPct, 3)}% > ${opts.maxSpreadPct ?? 0.4}%`);
+    if ((exec.quoteVolume24h ?? 0) < (opts.minExecQuoteVolume ?? 0)) reject("illiquid_exec_pair", `24h ${fmt(exec.quoteVolume24h, 0)} < ${opts.minExecQuoteVolume}`);
+  }
+  if (f.syntheticShare > p.maxSyntheticShare) reject("inactive_market", `${Math.round(f.syntheticShare * 100)}% of last 60 min without trades`);
+  if (!(f.ret15 <= -p.minDrop15)) reject("no_dip", `15m ${fmt(f.ret15, 2)}% > -${p.minDrop15}%`);
+  if (f.ret60 <= -p.maxDrop60) reject("crash", `60m ${fmt(f.ret60, 2)}% <= -${p.maxDrop60}%`);
+  if (f.ret1 < p.minRet1) reject("still_falling", `1m ${fmt(f.ret1, 2)}%`);
+  const comp = {
+    drop: 50 * ramp(-f.ret15, p.minDrop15, p.minDrop15 * 2.5),
+    stabilisation: 25 * ramp(f.ret1, p.minRet1, 0.2),
+    volume: 15 * ramp(Math.log2(Math.max(f.relVol5, 1e-6)), 0, 2),
+    cost: 10 * ramp(exec?.spreadPct ?? 0.3, 0.4, 0.05)
+  };
+  const score = Math.max(0, Math.min(100, Object.values(comp).reduce((a, b) => a + b, 0)));
+  const minScore = opts.minScore ?? 0;
+  if (score < minScore && !rejections.length) rejections.push({ code: "score_below_min", detail: `${fmt(score, 1)} < ${minScore}` });
+  return { score, components: comp, rejections, qualified: rejections.length === 0 };
+}

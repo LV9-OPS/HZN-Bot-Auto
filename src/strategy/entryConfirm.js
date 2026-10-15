@@ -30,6 +30,7 @@ export function confirmEntry({ signal, ticker, book, pair, allocationQuote, now,
   const roundTripCostPct = 2 * cfg.TAKER_FEE_PCT + ticker.spreadPct + 2 * cfg.EST_SLIPPAGE_PCT;
   const maxCost = cfg.MAX_COST_TO_STOP_RATIO * cfg.STOP_LOSS_PCT;
   if (roundTripCostPct > maxCost) no("costs_too_high", `round-trip cost ${fmt(roundTripCostPct, 2)}% > ${fmt(maxCost, 2)}% (${cfg.MAX_COST_TO_STOP_RATIO} x stop)`);
+  if (cfg.EXIT_MODE === "scalp" && cfg.SCALP_TAKE_PROFIT_PCT > 0 && roundTripCostPct > 0.5 * cfg.SCALP_TAKE_PROFIT_PCT) no("costs_vs_target", `round-trip cost ${fmt(roundTripCostPct, 2)}% > half of the +${cfg.SCALP_TAKE_PROFIT_PCT}% target`);
 
   if (!pair) return { ok: false, reasons };
   // Size the order: allocation includes the entry fee, limit at ask + slippage allowance.

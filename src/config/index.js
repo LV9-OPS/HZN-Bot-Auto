@@ -44,6 +44,13 @@ export const SPEC = {
   PLAN_SLOT1: { type: "string", def: "2:1", desc: "target:floor multiples for slot 1 (X2 then floor X1)" },
   PLAN_SLOT2: { type: "string", def: "3:2", desc: "slot 2 (X3 then floor X2)" },
   PLAN_SLOT3: { type: "string", def: "3:2", desc: "slot 3 (X3 then floor X2)" },
+  ENTRY_MODE: { type: "enum", enum: ["momentum", "dip"], def: "momentum", desc: "momentum = early breakout; dip = buy a sharp 15-minute drop that stopped falling" },
+  DIP_MIN_DROP_15M_PCT: { type: "num", def: 2, min: 0.5, max: 20, desc: "dip: minimum 15-minute drop" },
+  EXIT_MODE: { type: "enum", enum: ["plan", "scalp"], def: "plan", desc: "plan = X2/X3 profit plans; scalp = small take-profit, trailing stop, max holding time" },
+  SCALP_TAKE_PROFIT_PCT: { type: "num", def: 1.5, min: 0, max: 50, desc: "scalp: sell when bid >= entry +X% (0 = off)" },
+  SCALP_TRAIL_ACTIVATION_PCT: { type: "num", def: 0, min: 0, max: 50, desc: "scalp: arm a trailing stop once bid >= entry +X% (0 = off)" },
+  SCALP_TRAIL_DISTANCE_PCT: { type: "num", def: 0.5, min: 0.05, max: 20, desc: "scalp: trailing stop distance below the highest bid" },
+  SCALP_MAX_HOLD_MIN: { type: "int", def: 0, min: 0, max: 100000, desc: "scalp: exit after this many minutes (0 = off)" },
   EXIT_LIMIT_SLIPPAGE_PCT: { type: "num", def: 0.5, min: 0.05, max: 5, desc: "IOC sell limit placed this far below bid" },
   EXIT_MAX_IOC_ATTEMPTS: { type: "int", def: 3, min: 1, max: 10, desc: "IOC attempts before market fallback (stop/emergency only)" },
   EXIT_MARKET_FALLBACK: { type: "bool", def: true, desc: "Use a market sell when IOC attempts fail for stop-loss/emergency exits" },
@@ -155,6 +162,18 @@ export function buildConfig(env = process.env) {
 
   // Cross-field validation
   cfg.plans = [1, 2, 3].map((i) => parsePlan(cfg[`PLAN_SLOT${i}`], `PLAN_SLOT${i}`, errors));
+  if (cfg.EXIT_MODE === "scalp") {
+    if (!(cfg.SCALP_TAKE_PROFIT_PCT > 0) && !(cfg.SCALP_TRAIL_ACTIVATION_PCT > 0) && !(cfg.SCALP_MAX_HOLD_MIN > 0)) errors.push("EXIT_MODE=scalp needs a take-profit, a trailing stop or a max holding time");
+    const scalp = {
+      mode: "scalp",
+      takeProfitPct: cfg.SCALP_TAKE_PROFIT_PCT,
+      trailActivationPct: cfg.SCALP_TRAIL_ACTIVATION_PCT,
+      trailDistancePct: cfg.SCALP_TRAIL_DISTANCE_PCT,
+      maxHoldMin: cfg.SCALP_MAX_HOLD_MIN,
+      name: `TP+${cfg.SCALP_TAKE_PROFIT_PCT}%${cfg.SCALP_TRAIL_ACTIVATION_PCT > 0 ? ` trail ${cfg.SCALP_TRAIL_DISTANCE_PCT}%@+${cfg.SCALP_TRAIL_ACTIVATION_PCT}%` : ""}${cfg.SCALP_MAX_HOLD_MIN > 0 ? ` max ${cfg.SCALP_MAX_HOLD_MIN}min` : ""}`
+    };
+    cfg.plans = [scalp, scalp, scalp];
+  }
   if (cfg.SLOT_ALLOCATIONS.length < cfg.MAX_OPEN_POSITIONS) errors.push("SLOT_ALLOCATIONS must have at least MAX_OPEN_POSITIONS entries");
   const slotSum = cfg.SLOT_ALLOCATIONS.slice(0, cfg.MAX_OPEN_POSITIONS).reduce((a, b) => a + b, 0);
   if (slotSum > cfg.MAX_TRADING_BUDGET_QUOTE + 1e-9) errors.push(`Sum of slot allocations (${slotSum}) exceeds MAX_TRADING_BUDGET_QUOTE (${cfg.MAX_TRADING_BUDGET_QUOTE})`);
